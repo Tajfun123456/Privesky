@@ -1,3 +1,1005 @@
+================================================================================
+ SNÍMEK PROJEKTU (v3): C:\Projects\3D_Privěsky_Web_02
+================================================================================
+
+--- Adresářová struktura ---
+├── .git/ [Ignorováno]
+├── api/
+│   └── send-order-email.js
+├── index.html
+├── node_modules/ [Ignorováno]
+├── package-lock.json
+├── package.json
+└── snapshot_02.py
+
+================================================================================
+ ANALÝZA PROSTŘEDÍ (LOKÁLNÍ STROJ)
+================================================================================
+
+--- Systémové proměnné (OS) ---
+Operační systém: nt (win32)
+Aktuální uživatel: user
+Cesta k Pythonu: C:\Python313\python.exe
+
+--- Proměnné prostředí projektu ---
+Poznámka: 'Nenastaveno' znamená, že proměnná není nalezena na tomto stroji.
+V produkčním prostředí (Vercel/Netlify) by měly být nastaveny.
+RESEND_API_KEY: Nenastaveno
+PACKETA_API_KEY: Nenastaveno
+SVIX_WEBHOOK_SECRET: Nenastaveno
+NODE_ENV: Nenastaveno
+CI: Nenastaveno
+
+--- Lokální konfigurační soubory (.env) ---
+Soubor .env nenalezen.
+Soubor .env.local nenalezen.
+Soubor .env.development nenalezen.
+Soubor .env.production nenalezen.
+
+================================================================================
+ HLOUBKOVÁ ANALÝZA PROJEKTU
+================================================================================
+
+--- Analýza package.json ---
+Typ projektu (podle package.json): commonjs
+Hlavní závislosti (dependencies):
+  - resend: ^6.4.0
+Vývojové závislosti (devDependencies): Neuvedeny
+Skripty (scripts):
+  - test: "echo "Error: no test specified" && exit 1"
+
+--- Analýza index.html ---
+Externí skripty (CDN):
+  - https://cdn.tailwindcss.com
+  - https://unpkg.com/react@18/umd/react.development.js
+  - https://unpkg.com/react-dom@18/umd/react-dom.development.js
+  - https://unpkg.com/@babel/standalone/babel.min.js
+  - https://widget.packeta.com/v6/www/js/library.js
+  - https://www.balikovna.cz/widget/vyber-mist-v1.js
+Externí CSS (CDN):
+  (Žádné externí CSS nenalezeny)
+Detekovaná API volání (fetch):
+  - /api/send-order-email
+
+--- Analýza adresáře 'api/' ---
+Nalezené serverless funkce:
+  - /api/send-order-email.js
+
+================================================================================
+ OBSAH KLÍČOVÝCH SOUBORŮ
+================================================================================
+
+--- ZAČÁTEK: api\send-order-email.js ---
+// api/send-order-email.js
+import { Resend } from 'resend';
+
+// Inicializace Resend klienta s API klíčem z Environment Variables
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Adresa, kam se budou posílat notifikace o nových objednávkách
+const ADMIN_EMAIL = 'sf.simonflorian@gmail.com'; // Vaše e-mailová adresa
+
+export default async function handler(req, res) {
+  // Povolíme pouze POST metodu
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  try {
+    // Získáme data o objednávce z těla požadavku
+    const { contact, order, shippingOption, pickupPoint } = req.body;
+
+    if (!contact || !order) {
+        return res.status(400).json({ error: 'Missing order data' });
+    }
+
+    // --- 1. Sestavení e-mailu pro VÁS (admina) ---
+    const adminEmailHtml = `
+        <h1>Nová objednávka! 🚀</h1>
+        <p><strong>Číslo objednávky:</strong> ${order.orderId}</p>
+        <hr>
+        <h2>Kontaktní údaje</h2>
+        <p><strong>E-mail:</strong> ${contact.email}</p>
+        <p><strong>Telefon:</strong> ${contact.phone}</p>
+        <hr>
+        <h2>Doručení</h2>
+        <p><strong>Způsob:</strong> ${shippingOption.name}</p>
+        ${pickupPoint ? `
+            <h3>Výdejní místo:</h3>
+            <p>
+                <strong>${pickupPoint.name}</strong><br>
+                ${pickupPoint.street || ''}<br>
+                ${pickupPoint.zip || ''} ${pickupPoint.city || ''}
+            </p>
+        ` : `
+            <h3>Adresa:</h3>
+            <p>
+                ${contact.address.street} ${contact.address.number}<br>
+                ${contact.address.zip} ${contact.address.city}
+            </p>
+        `}
+        <hr>
+        <h2>Položky</h2>
+        <ul>
+            ${order.items.map(item => `<li>${item.productName} (x${item.quantity}) - ${item.price} Kč</li>`).join('')}
+        </ul>
+        <hr>
+        <h3>Mezisoučet: ${order.subtotal} Kč</h3>
+        <h3>Doprava: ${order.shippingCost} Kč</h3>
+        <h2>Celkem: ${order.total} Kč</h2>
+    `;
+
+    // --- 2. Sestavení e-mailu pro ZÁKAZNÍKA ---
+    const customerEmailHtml = `
+        <h1>Děkujeme za vaši objednávku! 🦊</h1>
+        <p>Dobrý den, vaše objednávka č. <strong>${order.orderId}</strong> byla úspěšně přijata a brzy ji začneme zpracovávat.</p>
+        <hr>
+        <h2>Souhrn objednávky</h2>
+        <p><strong>Způsob dopravy:</strong> ${shippingOption.name}</p>
+        ${pickupPoint ? `
+            <p><strong>Výdejní místo:</strong> ${pickupPoint.name}, ${pickupPoint.street || ''}, ${pickupPoint.zip || ''} ${pickupPoint.city || ''}</p>
+        ` : `
+            <p><strong>Doručovací adresa:</strong> ${contact.address.street} ${contact.address.number}, ${contact.address.zip} ${contact.address.city}</p>
+        `}
+        <hr>
+        <ul>
+            ${order.items.map(item => `<li>${item.productName} (x${item.quantity}) - ${item.price} Kč</li>`).join('')}
+        </ul>
+        <hr>
+        <p><strong>Mezisoučet:</strong> ${order.subtotal} Kč</p>
+        <p><strong>Doprava:</strong> ${order.shippingCost} Kč</p>
+        <p><strong>Celkem k úhradě:</strong> ${order.total} Kč</p>
+        <hr>
+        <p>S pozdravem,<br>Tým 3D Přívěsky</p>
+    `;
+
+    // --- 3. Odeslání obou e-mailů ---
+    await Promise.all([
+      // E-mail pro admina
+      resend.emails.send({
+        from: 'Nová objednávka <onboarding@resend.dev>',
+        to: ADMIN_EMAIL,
+        subject: `Nová objednávka: ${order.orderId}`,
+        html: adminEmailHtml,
+      }),
+      // E-mail pro zákazníka
+      resend.emails.send({
+        from: '3D Přívěsky <onboarding@resend.dev>',
+        to: contact.email,
+        subject: `Potvrzení objednávky č. ${order.orderId}`,
+        html: customerEmailHtml,
+      }),
+    ]);
+
+    // Pokud vše proběhlo, vrátíme úspěšnou odpověď
+    res.status(200).json({ message: 'Emails sent successfully!' });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to send emails.' });
+  }
+}
+--- KONEC: api\send-order-email.js ---
+
+--- Soubor nenalezen (to může být v pořádku): _headers ---
+
+--- ZAČÁTEK: package.json ---
+{
+  "name": "projects",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "resend": "^6.4.0"
+  }
+}
+
+--- KONEC: package.json ---
+
+--- ZAČÁTEK: node_modules\es6-promise\package.json ---
+{
+  "name": "es6-promise",
+  "description": "A lightweight library that provides tools for organizing asynchronous code",
+  "version": "4.2.8",
+  "author": "Yehuda Katz, Tom Dale, Stefan Penner and contributors (Conversion to ES6 API by Jake Archibald)",
+  "browser": {
+    "vertx": false
+  },
+  "bugs": {
+    "url": "https://github.com/stefanpenner/es6-promise/issues"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "babel-plugin-transform-es2015-arrow-functions": "^6.22.0",
+    "babel-plugin-transform-es2015-block-scoping": "^6.24.1",
+    "babel-plugin-transform-es2015-classes": "^6.24.1",
+    "babel-plugin-transform-es2015-computed-properties": "^6.24.1",
+    "babel-plugin-transform-es2015-constants": "^6.1.4",
+    "babel-plugin-transform-es2015-destructuring": "^6.23.0",
+    "babel-plugin-transform-es2015-parameters": "^6.24.1",
+    "babel-plugin-transform-es2015-shorthand-properties": "^6.24.1",
+    "babel-plugin-transform-es2015-spread": "^6.22.0",
+    "babel-plugin-transform-es2015-template-literals": "^6.22.0",
+    "babel6-plugin-strip-class-callcheck": "^6.0.0",
+    "broccoli-babel-transpiler": "^6.0.0",
+    "broccoli-concat": "^3.1.0",
+    "broccoli-merge-trees": "^2.0.0",
+    "broccoli-rollup": "^2.0.0",
+    "broccoli-stew": "^1.5.0",
+    "broccoli-uglify-js": "^0.2.0",
+    "broccoli-watchify": "^1.0.1",
+    "ember-cli": "2.18.0-beta.2",
+    "ember-cli-dependency-checker": "^2.1.0",
+    "git-repo-version": "1.0.1",
+    "json3": "^3.3.2",
+    "mocha": "^4.0.1",
+    "promises-aplus-tests-phantom": "^2.1.0-revise"
+  },
+  "directories": {
+    "lib": "lib"
+  },
+  "files": [
+    "dist",
+    "lib",
+    "es6-promise.d.ts",
+    "auto.js",
+    "!dist/test"
+  ],
+  "homepage": "https://github.com/stefanpenner/es6-promise",
+  "jsdelivr": "dist/es6-promise.auto.min.js",
+  "keywords": [
+    "futures",
+    "polyfill",
+    "promise",
+    "promises"
+  ],
+  "license": "MIT",
+  "main": "dist/es6-promise.js",
+  "namespace": "es6-promise",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/stefanpenner/es6-promise.git"
+  },
+  "scripts": {
+    "build": "ember build --environment production",
+    "prepublishOnly": "ember build --environment production",
+    "start": "ember s",
+    "test": "ember test",
+    "test:browser": "ember test --launch PhantomJS",
+    "test:node": "ember test --launch Mocha",
+    "test:server": "ember test --server"
+  },
+  "spm": {
+    "main": "dist/es6-promise.js"
+  },
+  "typings": "es6-promise.d.ts",
+  "unpkg": "dist/es6-promise.auto.min.js"
+}
+
+--- KONEC: node_modules\es6-promise\package.json ---
+
+--- ZAČÁTEK: node_modules\fast-sha256\package.json ---
+{
+  "name": "fast-sha256",
+  "version": "1.3.0",
+  "description": "SHA-256, HMAC and PBKDF2 implementation with typed arrays for modern browsers and Node.js",
+  "main": "sha256.js",
+  "files": [
+    "sha256.js",
+    "sha256.min.js",
+    "sha256.d.ts"
+  ],
+  "typings": "sha256",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "build": "tsc && echo '});' | cat build/umd-prelude.js build/sha256.js - > sha256.js && rm build/sha256.js && uglifyjs sha256.js -c -m -o sha256.min.js && mv build/sha256.d.ts ./",
+    "test": "tape test/test.js | faucet",
+    "bench": "node test/bench.js",
+    "lint": "tslint src/*.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dchest/fast-sha256-js"
+  },
+  "keywords": [
+    "hash",
+    "sha256",
+    "pbkdf2",
+    "cryptography",
+    "crypto",
+    "hmac"
+  ],
+  "author": "Dmitry Chestnykh",
+  "license": "Unlicense",
+  "devDependencies": {
+    "faucet": "0.x.x",
+    "tape": "4.11.0",
+    "tslint": "^5.20.0",
+    "typescript": "^3.6.4",
+    "uglify-js": "^3.1.9"
+  }
+}
+
+--- KONEC: node_modules\fast-sha256\package.json ---
+
+--- ZAČÁTEK: node_modules\querystringify\package.json ---
+{
+  "name": "querystringify",
+  "version": "2.2.0",
+  "description": "Querystringify - Small, simple but powerful query string parser.",
+  "main": "index.js",
+  "scripts": {
+    "test": "nyc --reporter=html --reporter=text mocha test.js",
+    "watch": "mocha --watch test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/unshiftio/querystringify"
+  },
+  "keywords": [
+    "query",
+    "string",
+    "query-string",
+    "querystring",
+    "qs",
+    "stringify",
+    "parse",
+    "decode",
+    "encode"
+  ],
+  "author": "Arnout Kazemier",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/unshiftio/querystringify/issues"
+  },
+  "homepage": "https://github.com/unshiftio/querystringify",
+  "devDependencies": {
+    "assume": "^2.1.0",
+    "coveralls": "^3.1.0",
+    "mocha": "^8.1.1",
+    "nyc": "^15.1.0",
+    "pre-commit": "^1.2.2"
+  }
+}
+
+--- KONEC: node_modules\querystringify\package.json ---
+
+--- ZAČÁTEK: node_modules\requires-port\package.json ---
+{
+  "name": "requires-port",
+  "version": "1.0.0",
+  "description": "Check if a protocol requires a certain port number to be added to an URL.",
+  "main": "index.js",
+  "scripts": {
+    "100%": "istanbul check-coverage --statements 100 --functions 100 --lines 100 --branches 100",
+    "test-travis": "istanbul cover _mocha --report lcovonly -- test.js",
+    "coverage": "istanbul cover _mocha -- test.js",
+    "watch": "mocha --watch test.js",
+    "test": "mocha test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/unshiftio/requires-port"
+  },
+  "keywords": [
+    "port",
+    "require",
+    "http",
+    "https",
+    "ws",
+    "wss",
+    "gopher",
+    "file",
+    "ftp",
+    "requires",
+    "requried",
+    "portnumber",
+    "url",
+    "parsing",
+    "validation",
+    "cows"
+  ],
+  "author": "Arnout Kazemier",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/unshiftio/requires-port/issues"
+  },
+  "homepage": "https://github.com/unshiftio/requires-port",
+  "devDependencies": {
+    "assume": "1.3.x",
+    "istanbul": "0.4.x",
+    "mocha": "2.3.x",
+    "pre-commit": "1.1.x"
+  }
+}
+
+--- KONEC: node_modules\requires-port\package.json ---
+
+--- ZAČÁTEK: node_modules\resend\package.json ---
+{
+  "name": "resend",
+  "version": "6.4.0",
+  "description": "Node.js library for the Resend API",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist/**"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts",
+    "format": "biome format --write .",
+    "format:apply": "biome check --write .",
+    "format:check": "biome format .",
+    "lint": "biome check .",
+    "prepublishOnly": "pnpm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "test:record": "rimraf --glob \"**/__recordings__\" && cross-env TEST_MODE=record vitest run",
+    "test:dev": "cross-env TEST_MODE=dev vitest run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/resend/resend-node.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/resend/resend-node/issues"
+  },
+  "homepage": "https://github.com/resend/resend-node#readme",
+  "dependencies": {
+    "svix": "1.76.1"
+  },
+  "peerDependencies": {
+    "@react-email/render": "*"
+  },
+  "peerDependenciesMeta": {
+    "@react-email/render": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.5",
+    "@pollyjs/adapter-fetch": "6.0.7",
+    "@pollyjs/core": "6.0.6",
+    "@pollyjs/persister-fs": "6.0.6",
+    "@types/node": "22.18.9",
+    "@types/react": "19.2.0",
+    "cross-env": "10.1.0",
+    "dotenv": "17.2.3",
+    "pkg-pr-new": "0.0.60",
+    "rimraf": "6.0.1",
+    "tsup": "8.5.0",
+    "typescript": "5.9.3",
+    "vitest": "3.2.4",
+    "vitest-fetch-mock": "0.4.5"
+  },
+  "packageManager": "pnpm@10.18.2"
+}
+
+--- KONEC: node_modules\resend\package.json ---
+
+--- ZAČÁTEK: node_modules\svix\package.json ---
+{
+  "name": "svix",
+  "version": "1.76.1",
+  "description": "Svix webhooks API client and webhook verification library",
+  "author": "svix",
+  "repository": "https://github.com/svix/svix-libs",
+  "type": "commonjs",
+  "keywords": [
+    "svix",
+    "diahook",
+    "webhooks",
+    "typescript"
+  ],
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "typings": "./dist/index.d.ts",
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepare": "yarn run build",
+    "test": "jest",
+    "prepublishOnly": "yarn lint",
+    "lint:eslint": "eslint src",
+    "lint:prettier": "prettier src",
+    "lint": "yarn run lint:prettier --check && yarn run lint:eslint --max-warnings=0",
+    "lint:fix": "yarn run lint:eslint --fix && yarn run lint:prettier --write"
+  },
+  "dependencies": {
+    "@stablelib/base64": "^1.0.0",
+    "@types/node": "^22.7.5",
+    "es6-promise": "^4.2.8",
+    "fast-sha256": "^1.3.0",
+    "url-parse": "^1.5.10",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.20.0",
+    "@stablelib/utf8": "^2.0.0",
+    "@types/jest": "^29.5.13",
+    "@types/url-parse": "1.4.11",
+    "@types/uuid": "^10.0.0",
+    "eslint": "^9.20.1",
+    "globals": "^15.15.0",
+    "jest": "^29.7.0",
+    "mockttp": "^3.15.5",
+    "prettier": "^3.3.3",
+    "ts-jest": "^29.2.5",
+    "typescript": "^4.0",
+    "typescript-eslint": "^8.24.0"
+  }
+}
+
+--- KONEC: node_modules\svix\package.json ---
+
+--- ZAČÁTEK: node_modules\undici-types\package.json ---
+{
+  "name": "undici-types",
+  "version": "6.21.0",
+  "description": "A stand-alone types package for Undici",
+  "homepage": "https://undici.nodejs.org",
+  "bugs": {
+    "url": "https://github.com/nodejs/undici/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nodejs/undici.git"
+  },
+  "license": "MIT",
+  "types": "index.d.ts",
+  "files": [
+    "*.d.ts"
+  ],
+  "contributors": [
+    {
+      "name": "Daniele Belardi",
+      "url": "https://github.com/dnlup",
+      "author": true
+    },
+    {
+      "name": "Ethan Arrowood",
+      "url": "https://github.com/ethan-arrowood",
+      "author": true
+    },
+    {
+      "name": "Matteo Collina",
+      "url": "https://github.com/mcollina",
+      "author": true
+    },
+    {
+      "name": "Matthew Aitken",
+      "url": "https://github.com/KhafraDev",
+      "author": true
+    },
+    {
+      "name": "Robert Nagy",
+      "url": "https://github.com/ronag",
+      "author": true
+    },
+    {
+      "name": "Szymon Marczak",
+      "url": "https://github.com/szmarczak",
+      "author": true
+    },
+    {
+      "name": "Tomas Della Vedova",
+      "url": "https://github.com/delvedor",
+      "author": true
+    }
+  ]
+}
+--- KONEC: node_modules\undici-types\package.json ---
+
+--- ZAČÁTEK: node_modules\url-parse\package.json ---
+{
+  "name": "url-parse",
+  "version": "1.5.10",
+  "description": "Small footprint URL parser that works seamlessly across Node.js and browser environments",
+  "main": "index.js",
+  "scripts": {
+    "browserify": "rm -rf dist && mkdir -p dist && browserify index.js -s URLParse -o dist/url-parse.js",
+    "minify": "uglifyjs dist/url-parse.js --source-map -cm -o dist/url-parse.min.js",
+    "test": "c8 --reporter=lcov --reporter=text mocha test/test.js",
+    "test-browser": "node test/browser.js",
+    "prepublishOnly": "npm run browserify && npm run minify",
+    "watch": "mocha --watch test/test.js"
+  },
+  "files": [
+    "index.js",
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/unshiftio/url-parse.git"
+  },
+  "keywords": [
+    "URL",
+    "parser",
+    "uri",
+    "url",
+    "parse",
+    "query",
+    "string",
+    "querystring",
+    "stringify"
+  ],
+  "author": "Arnout Kazemier",
+  "license": "MIT",
+  "dependencies": {
+    "querystringify": "^2.1.1",
+    "requires-port": "^1.0.0"
+  },
+  "devDependencies": {
+    "assume": "^2.2.0",
+    "browserify": "^17.0.0",
+    "c8": "^7.3.1",
+    "mocha": "^9.0.3",
+    "pre-commit": "^1.2.2",
+    "sauce-browsers": "^2.0.0",
+    "sauce-test": "^1.3.3",
+    "uglify-js": "^3.5.7"
+  }
+}
+
+--- KONEC: node_modules\url-parse\package.json ---
+
+--- ZAČÁTEK: node_modules\uuid\package.json ---
+{
+  "name": "uuid",
+  "version": "10.0.0",
+  "description": "RFC9562 UUIDs",
+  "funding": [
+    "https://github.com/sponsors/broofa",
+    "https://github.com/sponsors/ctavan"
+  ],
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
+  },
+  "keywords": [
+    "uuid",
+    "guid",
+    "rfc4122",
+    "rfc9562"
+  ],
+  "license": "MIT",
+  "bin": {
+    "uuid": "dist/bin/uuid"
+  },
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "node": {
+        "module": "./dist/esm-node/index.js",
+        "require": "./dist/index.js",
+        "import": "./wrapper.mjs"
+      },
+      "browser": {
+        "import": "./dist/esm-browser/index.js",
+        "require": "./dist/commonjs-browser/index.js"
+      },
+      "default": "./dist/esm-browser/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "module": "./dist/esm-node/index.js",
+  "browser": {
+    "./dist/esm-node/index.js": "./dist/esm-browser/index.js",
+    "./dist/md5.js": "./dist/md5-browser.js",
+    "./dist/native.js": "./dist/native-browser.js",
+    "./dist/rng.js": "./dist/rng-browser.js",
+    "./dist/sha1.js": "./dist/sha1-browser.js"
+  },
+  "files": [
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "LICENSE.md",
+    "README.md",
+    "dist",
+    "wrapper.mjs"
+  ],
+  "devDependencies": {
+    "@babel/cli": "7.24.6",
+    "@babel/core": "7.24.6",
+    "@babel/eslint-parser": "7.24.6",
+    "@babel/plugin-syntax-import-attributes": "7.24.6",
+    "@babel/preset-env": "7.24.6",
+    "@commitlint/cli": "19.3.0",
+    "@commitlint/config-conventional": "19.2.2",
+    "@wdio/browserstack-service": "7.16.10",
+    "@wdio/cli": "7.16.10",
+    "@wdio/jasmine-framework": "7.16.6",
+    "@wdio/local-runner": "7.16.10",
+    "@wdio/spec-reporter": "7.16.9",
+    "@wdio/static-server-service": "7.16.6",
+    "bundlewatch": "0.3.3",
+    "eslint": "9.4.0",
+    "eslint-plugin-prettier": "5.1.3",
+    "globals": "15.3.0",
+    "husky": "9.0.11",
+    "jest": "29.7.0",
+    "lint-staged": "15.2.5",
+    "neostandard": "0.5.1",
+    "npm-run-all": "4.1.5",
+    "optional-dev-dependency": "2.0.1",
+    "prettier": "3.3.0",
+    "random-seed": "0.3.0",
+    "runmd": "1.3.9",
+    "standard-version": "9.5.0"
+  },
+  "optionalDevDependencies": {
+    "@wdio/browserstack-service": "7.16.10",
+    "@wdio/cli": "7.16.10",
+    "@wdio/jasmine-framework": "7.16.6",
+    "@wdio/local-runner": "7.16.10",
+    "@wdio/spec-reporter": "7.16.9",
+    "@wdio/static-server-service": "7.16.6"
+  },
+  "scripts": {
+    "examples:browser:webpack:build": "cd examples/browser-webpack && npm install && npm run build",
+    "examples:browser:rollup:build": "cd examples/browser-rollup && npm install && npm run build",
+    "examples:node:commonjs:test": "cd examples/node-commonjs && npm install && npm test",
+    "examples:node:esmodules:test": "cd examples/node-esmodules && npm install && npm test",
+    "examples:node:jest:test": "cd examples/node-jest && npm install && npm test",
+    "prepare": "husky install",
+    "lint": "npm run eslint:check && npm run prettier:check",
+    "eslint:check": "eslint src/ test/ examples/ *.js",
+    "eslint:fix": "eslint --fix src/ test/ examples/ *.js",
+    "pretest": "npm run build",
+    "test": "BABEL_ENV=commonjsNode node --throw-deprecation node_modules/.bin/jest test/unit/",
+    "test:matching": "BABEL_ENV=commonjsNode node --throw-deprecation node_modules/.bin/jest test/unit/ -t",
+    "pretest:browser": "optional-dev-dependency && npm run build && npm-run-all --parallel examples:browser:**",
+    "test:browser": "wdio run ./wdio.conf.js",
+    "pretest:node": "npm run build",
+    "test:node": "npm-run-all --parallel examples:node:**",
+    "test:pack": "./scripts/testpack.sh",
+    "pretest:benchmark": "npm run build",
+    "test:benchmark": "cd examples/benchmark && HUSKY=0 npm install && npm test",
+    "prettier:check": "prettier --check .",
+    "prettier:fix": "prettier --write .",
+    "bundlewatch": "npm run pretest:browser && bundlewatch --config bundlewatch.config.json",
+    "md": "runmd --watch --output=README.md README_js.md",
+    "docs": "npm run build && npx runmd --output=README.md README_js.md",
+    "docs:diff": "npm run docs && git diff --quiet README.md",
+    "build": "./scripts/build.sh",
+    "prepack": "npm run build",
+    "release": "standard-version --no-verify"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/uuidjs/uuid.git"
+  },
+  "lint-staged": {
+    "*": [
+      "prettier --no-error-on-unmatched-pattern --write"
+    ],
+    "*.{js,jsx}": [
+      "eslint --no-error-on-unmatched-pattern --fix"
+    ]
+  },
+  "standard-version": {
+    "scripts": {
+      "postchangelog": "prettier --write CHANGELOG.md"
+    }
+  },
+  "packageManager": "npm@10.8.1+sha256.b8807aebb9656758e2872fa6e7c564b506aa2faa9297439a478d471d2fe32483"
+}
+
+--- KONEC: node_modules\uuid\package.json ---
+
+--- ZAČÁTEK: node_modules\@types\node\package.json ---
+{
+    "name": "@types/node",
+    "version": "22.18.13",
+    "description": "TypeScript definitions for node",
+    "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "Microsoft TypeScript",
+            "githubUsername": "Microsoft",
+            "url": "https://github.com/Microsoft"
+        },
+        {
+            "name": "Alberto Schiabel",
+            "githubUsername": "jkomyno",
+            "url": "https://github.com/jkomyno"
+        },
+        {
+            "name": "Andrew Makarov",
+            "githubUsername": "r3nya",
+            "url": "https://github.com/r3nya"
+        },
+        {
+            "name": "Benjamin Toueg",
+            "githubUsername": "btoueg",
+            "url": "https://github.com/btoueg"
+        },
+        {
+            "name": "David Junger",
+            "githubUsername": "touffy",
+            "url": "https://github.com/touffy"
+        },
+        {
+            "name": "Mohsen Azimi",
+            "githubUsername": "mohsen1",
+            "url": "https://github.com/mohsen1"
+        },
+        {
+            "name": "Nikita Galkin",
+            "githubUsername": "galkin",
+            "url": "https://github.com/galkin"
+        },
+        {
+            "name": "Sebastian Silbermann",
+            "githubUsername": "eps1lon",
+            "url": "https://github.com/eps1lon"
+        },
+        {
+            "name": "Wilco Bakker",
+            "githubUsername": "WilcoBakker",
+            "url": "https://github.com/WilcoBakker"
+        },
+        {
+            "name": "Marcin Kopacz",
+            "githubUsername": "chyzwar",
+            "url": "https://github.com/chyzwar"
+        },
+        {
+            "name": "Trivikram Kamat",
+            "githubUsername": "trivikr",
+            "url": "https://github.com/trivikr"
+        },
+        {
+            "name": "Junxiao Shi",
+            "githubUsername": "yoursunny",
+            "url": "https://github.com/yoursunny"
+        },
+        {
+            "name": "Ilia Baryshnikov",
+            "githubUsername": "qwelias",
+            "url": "https://github.com/qwelias"
+        },
+        {
+            "name": "ExE Boss",
+            "githubUsername": "ExE-Boss",
+            "url": "https://github.com/ExE-Boss"
+        },
+        {
+            "name": "Piotr Błażejewicz",
+            "githubUsername": "peterblazejewicz",
+            "url": "https://github.com/peterblazejewicz"
+        },
+        {
+            "name": "Anna Henningsen",
+            "githubUsername": "addaleax",
+            "url": "https://github.com/addaleax"
+        },
+        {
+            "name": "Victor Perin",
+            "githubUsername": "victorperin",
+            "url": "https://github.com/victorperin"
+        },
+        {
+            "name": "NodeJS Contributors",
+            "githubUsername": "NodeJS",
+            "url": "https://github.com/NodeJS"
+        },
+        {
+            "name": "Linus Unnebäck",
+            "githubUsername": "LinusU",
+            "url": "https://github.com/LinusU"
+        },
+        {
+            "name": "wafuwafu13",
+            "githubUsername": "wafuwafu13",
+            "url": "https://github.com/wafuwafu13"
+        },
+        {
+            "name": "Matteo Collina",
+            "githubUsername": "mcollina",
+            "url": "https://github.com/mcollina"
+        },
+        {
+            "name": "Dmitry Semigradsky",
+            "githubUsername": "Semigradsky",
+            "url": "https://github.com/Semigradsky"
+        },
+        {
+            "name": "René",
+            "githubUsername": "Renegade334",
+            "url": "https://github.com/Renegade334"
+        }
+    ],
+    "main": "",
+    "types": "index.d.ts",
+    "typesVersions": {
+        "<=5.6": {
+            "*": [
+                "ts5.6/*"
+            ]
+        }
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/node"
+    },
+    "scripts": {},
+    "dependencies": {
+        "undici-types": "~6.21.0"
+    },
+    "peerDependencies": {},
+    "typesPublisherContentHash": "b8ac24154056ed24fb8db73d5167bc4d35ca1997a14be6a7384587fe6f34f75c",
+    "typeScriptVersion": "5.2"
+}
+--- KONEC: node_modules\@types\node\package.json ---
+
+--- ZAČÁTEK: node_modules\@stablelib\base64\package.json ---
+{
+  "name": "@stablelib/base64",
+  "version": "1.0.1",
+  "description": "Base64 encoding and decoding",
+  "main": "./lib/base64.js",
+  "typings": "./lib/base64.d.ts",
+  "author": "Dmitry Chestnykh",
+  "license": "MIT",
+  "repository": {
+    "url": "https://github.com/StableLib/stablelib"
+  },
+  "homepage": "https://github.com/StableLib/stablelib/tree/master/packages/base64",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jasmine JASMINE_CONFIG_PATH=../../configs/jasmine.json",
+    "bench": "node ./lib/base64.bench.js"
+  },
+  "devDependencies": {
+    "@stablelib/benchmark": "^1.0.1"
+  },
+  "gitHead": "03dadf27703120d54e6be8436525228ee1c4299b"
+}
+
+--- KONEC: node_modules\@stablelib\base64\package.json ---
+
+--- Soubor nenalezen (to může být v pořádku): _redirects ---
+
+--- ZAČÁTEK: index.html ---
 <!DOCTYPE html>
 <html lang="cs">
 <head>
@@ -13,11 +1015,6 @@
 
     <script src="https://widget.packeta.com/v6/www/js/library.js"></script>
     <script src="https://www.balikovna.cz/widget/vyber-mist-v1.js"></script>
-
-    <!-- NOVINKA: Přidána knihovna three.js pro analýzu 3D modelů -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- NOVINKA: Přidán STLLoader pro three.js -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
 
     <style>
         /* Jednoduchý styl pro 'prose' (pro textový obsah) */
@@ -41,19 +1038,6 @@
         }
         .prose li {
             margin-bottom: 0.5em;
-        }
-        /* Styl pro nahrávání souboru */
-        .file-upload-area {
-            border: 2px dashed #cbd5e1;
-            border-radius: 0.5rem;
-            padding: 2rem;
-            text-align: center;
-            cursor: pointer;
-            transition: background-color 0.2s ease-in-out;
-        }
-        .file-upload-area:hover,
-        .file-upload-area.drag-over {
-            background-color: #f8fafc;
         }
     </style>
 </head>
@@ -91,25 +1075,14 @@ interface Review {
   text: string;
 }
 
-// *** UPRAVENO: CartItem nyní podporuje 'product' a 'custom' typy ***
 interface CartItem {
-  id: string; // Může být ProductType ('fox', 'dog') nebo unikátní ID pro zakázkový tisk
+  id: ProductType;
   quantity: number;
-  type: 'product' | 'custom';
-  // Detaily pouze pro 'custom' typ
-  customDetails?: {
-    name: string;
-    price: number;
-    fileName: string;
-    volumeCm3: number; // Objem v cm^3
-    material: string; // Vybraný materiál
-    imageUrl: string; // Placeholder obrázek
-  };
 }
 */
 
-// *** UPRAVENO: Přidána stránka 'customPrint' ***
-/* type Page = 'home' | 'product' | 'contact' | 'cart' | 'checkout' | 'printing' | 'confirmation' | 'customPrint';
+// Rozšířeno o 'confirmation' stránku dle MVP
+/* type Page = 'home' | 'product' | 'contact' | 'cart' | 'checkout' | 'printing' | 'confirmation';
 
 interface ShippingOption {
   id: string;
@@ -119,12 +1092,14 @@ interface ShippingOption {
   type: 'address' | 'pickup';
 }
 
+// *** UPRAVENO: Toto je nyní obecná struktura pro vrácená data z widgetů ***
 interface PickupPoint {
   id: string;
   name: string;
   street?: string;
   city?: string;
   zip?: string;
+  // Mohou zde být i další vlastnosti specifické pro widget
 }
 
 interface ShippingAddress {
@@ -144,13 +1119,13 @@ interface OrderConfirmation {
     orderId: string;
     contact: ContactDetails;
     order: {
-        items: CartItem[]; // Nyní obsahuje nové CartItem objekty
+        items: CartItem[];
         subtotal: number;
         shippingCost: number;
         total: number;
     };
     shippingOption: ShippingOption | undefined;
-    pickupPoint: PickupPoint | undefined;
+    pickupPoint: PickupPoint | undefined; // Použije novou strukturu
 }
 
 interface AppContextType {
@@ -158,24 +1133,22 @@ interface AppContextType {
   currentProduct: ProductType;
   cart: CartItem[];
   shippingOptionId: string | null;
-  selectedPickupPoint: PickupPoint | null;
+  selectedPickupPoint: PickupPoint | null; // *** UPRAVENO: z selectedPickupPointId na objekt ***
   shippingAddress: ShippingAddress;
   toastMessage: string | null;
   orderConfirmation: OrderConfirmation | null;
-  isSubmitting: boolean;
+  isSubmitting: boolean; // <-- NOVÝ STAV
   navigateTo: (page: Page, productId?: ProductType) => void;
   addToCart: (productId: ProductType, quantity: number) => void;
-  // *** NOVINKA: Funkce pro přidání zakázkového tisku ***
-  addCustomItemToCart: (item: CartItem) => void;
-  updateCartItemQuantity: (itemId: string, newQuantity: number) => void;
-  removeFromCart: (itemId: string) => void;
+  updateCartItemQuantity: (productId: ProductType, newQuantity: number) => void;
+  removeFromCart: (productId: ProductType) => void;
   clearCart: () => void;
   selectShippingOption: (optionId: string) => void;
-  selectPickupPoint: (point: PickupPoint | null) => void;
+  selectPickupPoint: (point: PickupPoint | null) => void; // *** UPRAVENO: přijímá objekt nebo null ***
   setShippingAddress: (address: Partial<ShippingAddress>) => void;
   showToast: (message: string) => void;
   clearToast: () => void;
-  submitOrder: (contact: ContactDetails, order: any, shipping: any, pickup: any) => Promise<void>;
+  submitOrder: (contact: ContactDetails, order: any, shipping: any, pickup: any) => Promise<void>; // <-- UPRAVENO NA ASYNC
   totalCartItems: number;
   cartSubtotal: number;
   shippingCost: number;
@@ -184,7 +1157,7 @@ interface AppContextType {
 */
 
 // --- KONSTANTY A MOCK DATA ---
-const { useState, useContext, createContext, useMemo, useCallback, forwardRef, useEffect } = React;
+const { useState, useContext, createContext, useMemo, useCallback, forwardRef } = React;
 
 const FREE_SHIPPING_THRESHOLD = 1000;
 const DEFAULT_SHIPPING_COST = 50;
@@ -197,11 +1170,9 @@ const IMAGES = {
   dog_vanoce: "https://placehold.co/600x600/a67c00/white?text=Pes+Vánoce",
   dog_batoh: "https://placehold.co/600x600/2d2d2d/white?text=Pes+na+batohu",
   dog_dvere: "https://placehold.co/600x600/8c6a4f/white?text=Pes+u+dveří",
+  // map_placeholder a map_active již nejsou potřeba
   printer_image: "https://placehold.co/400x300/e0e0e0/9ca3af?text=Bambu+Lab+P1S",
   filament_image: "https://placehold.co/400x300/e0e0e0/9ca3af?text=PLA+Filamenty",
-  // *** NOVINKA: Obrázky pro zakázkový tisk ***
-  custom_print_hero: "https://placehold.co/1200x500/1a1a1a/white?text=Váš+Nápad,+Náš+Tisk",
-  custom_print_placeholder: "https://placehold.co/200x200/e0e0e0/9ca3af?text=Váš+Model",
 };
 
 const PRODUCT_DATA = {
@@ -244,11 +1215,14 @@ const PRODUCT_DATA = {
 };
 
 // --- IKONY (LUCIDE-REACT NÁHRADA) ---
-// (Ikony zůstávají beze změny... přidána IconCube)
+// (Ikony zůstávají beze změny)
 
 const IconTruck = ({ size = 24, className = "" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M5 18H3c-.6 0-1-.4-1-1V7c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v11"/><path d="M14 9h7c.6 0 1 .4 1 1v9c0 .6-.4 1-1 1h-7l-2 2v-2z"/><path d="M10 6V4c0-.6-.4-1-1-1H4c-.6 0-1 .4-1 1v2"/><path d="M18 18.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z"/><path d="M9 18.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z"/>
+    <path d="M5 18H3c-.6 0-1-.4-1-1V7c0-.6.4-1 1-1h10c.6 0 1 .4 1 1v11"/>
+    <path d="M14 9h7c.6 0 1 .4 1 1v9c0 .6-.4 1-1 1h-7l-2 2v-2z"/>
+    <path d="M10 6V4c0-.6-.4-1-1-1H4c-.6 0-1 .4-1 1v2"/>
+    <path d="M18 18.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z"/><path d="M9 18.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z"/>
   </svg>
 );
 const IconSearch = ({ size = 24, className = "" }) => (
@@ -263,7 +1237,8 @@ const IconUser = ({ size = 24, className = "" }) => (
 );
 const IconShoppingBag = ({ size = 24, className = "" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>
+    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/>
+    <path d="M16 10a4 4 0 0 1-8 0"/>
   </svg>
 );
 const IconMinus = ({ size = 16, className = "" }) => (
@@ -278,12 +1253,14 @@ const IconPlus = ({ size = 16, className = "" }) => (
 );
 const IconTrash = ({ size = 24, className = "" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+    <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
   </svg>
 );
 const IconPackage = ({ size = 24, className = "" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
   </svg>
 );
 const IconHome = ({ size = 24, className = "" }) => (
@@ -298,7 +1275,8 @@ const IconAward = ({ size = 24, className = "" }) => (
 );
 const IconPrinter = ({ size = 24, className = "" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
+    <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+    <rect x="6" y="14" width="12" height="8"/>
   </svg>
 );
 const IconMail = ({ size = 24, className = "" }) => (
@@ -313,7 +1291,8 @@ const IconSend = ({ size = 18, className = "" }) => (
 );
 const IconMap = ({ size = 24, className = "" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+    <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/>
+    <line x1="16" y1="6" x2="16" y2="22"/>
   </svg>
 );
 const IconFilter = ({ size = 16, className = "" }) => (
@@ -378,7 +1357,8 @@ const IconFacebook = ({ size = 24, className = "" }) => (
 );
 const IconInstagram = ({ size = 24, className = "" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+    <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
   </svg>
 );
 const IconX = ({ size = 24, className = "" }) => (
@@ -388,45 +1368,20 @@ const IconX = ({ size = 24, className = "" }) => (
 );
 const IconCheckCircle = ({ size = 24, className = "" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+    <polyline points="22 4 12 14.01 9 11.01"/>
   </svg>
-);
-// *** NOVINKA: Ikona pro zakázkový tisk ***
-const IconCube = ({ size = 24, className = "" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
-  </svg>
-);
-const IconUploadCloud = ({ size = 24, className = "" }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/>
-  </svg>
-);
-const IconFile = ({ size = 24, className = "" }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-        <polyline points="14 2 14 8 20 8" />
-    </svg>
-);
-const IconLoader = ({ size = 24, className = "" }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`${className} animate-spin`}>
-        <line x1="12" y1="2" x2="12" y2="6" />
-        <line x1="12" y1="18" x2="12" y2="22" />
-        <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
-        <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
-        <line x1="2" y1="12" x2="6" y2="12" />
-        <line x1="18" y1="12" x2="22" y2="12" />
-        <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
-        <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
-    </svg>
 );
 
+
+// *** UPRAVENO: Odebrány ostatní způsoby dopravy ***
 const SHIPPING_OPTIONS_DATA = [
   { id: 'balik_box', name: 'Balíkovna do Balíkovny', price: 50, icon: <React.Fragment><IconPackage /><IconBox /></React.Fragment>, type: 'pickup' },
   { id: 'zasil_box', name: 'Zásilkovna do Z-Boxu', price: 89, icon: <React.Fragment><IconPost /><IconBox /></React.Fragment>, type: 'pickup' },
 ];
 
+// *** SMAZÁNO: Mock data pro výdejní místa již nejsou potřeba ***
+// const PICKUP_POINTS_DATA = [ ... ];
 
 // --- APP CONTEXT (STATE MANAGEMENT) ---
 
@@ -436,8 +1391,11 @@ const AppProvider = ({ children }) => {
   const [currentPage, setCurrentPage] = useState('home');
   const [currentProduct, setCurrentProduct] = useState('fox');
   const [cart, setCart] = useState([]);
-  const [shippingOptionId, setShippingOptionId] = useState('zasil_box');
+  const [shippingOptionId, setShippingOptionId] = useState('zasil_box'); // Výchozí je Zásilkovna
+  
+  // *** UPRAVENO: Změna z ID na celý objekt ***
   const [selectedPickupPoint, setSelectedPickupPoint] = useState(null);
+  
   const [shippingAddress, setShippingAddressState] = useState({
     city: '',
     zip: '',
@@ -445,7 +1403,12 @@ const AppProvider = ({ children }) => {
     number: '',
   });
   const [toastMessage, setToastMessage] = useState(null);
+  
   const [orderConfirmation, setOrderConfirmation] = useState(null);
+  
+  // ==================================================================
+  // ### KROK 3 - ZMĚNA #1: Přidán nový stav pro sledování odesílání ###
+  // ==================================================================
   const [isSubmitting, setIsSubmitting] = useState(false);
 
 
@@ -471,59 +1434,34 @@ const AppProvider = ({ children }) => {
     window.scrollTo(0, 0);
   };
 
-  // *** UPRAVENO: addToCart nyní přidává 'type: product' ***
   const addToCart = (productId, quantity) => {
     setCart((prevCart) => {
-      // Hledáme pouze existující produkt stejného typu
-      const existingItem = prevCart.find((item) => item.id === productId && item.type === 'product');
+      const existingItem = prevCart.find((item) => item.id === productId);
       if (existingItem) {
         return prevCart.map((item) =>
-          (item.id === productId && item.type === 'product')
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
+          item.id === productId ? { ...item, quantity: item.quantity + quantity } : item
         );
       }
-      // Přidáváme nový produkt
-      return [...prevCart, { id: productId, quantity: quantity, type: 'product' }];
+      return [...prevCart, { id: productId, quantity }];
     });
     showToast(`"${PRODUCT_DATA[productId].name}" přidán do košíku!`);
   };
-  
-  // *** NOVINKA: Funkce pro přidání zakázkového tisku ***
-  const addCustomItemToCart = (item) => {
-    setCart((prevCart) => {
-      // Zakázkový tisk je vždy unikátní, takže ho jen přidáme
-      return [...prevCart, item];
-    });
-    showToast(`"${item.customDetails.name}" přidán do košíku!`);
-  };
 
-  // *** UPRAVENO: Nyní pracuje s 'itemId' ***
-  const updateCartItemQuantity = (itemId, newQuantity) => {
+  const updateCartItemQuantity = (productId, newQuantity) => {
     if (newQuantity <= 0) {
-      removeFromCart(itemId);
+      removeFromCart(productId);
     } else {
       setCart((prevCart) =>
         prevCart.map((item) =>
-          item.id === itemId ? { ...item, quantity: newQuantity } : item
+          item.id === productId ? { ...item, quantity: newQuantity } : item
         )
       );
     }
   };
 
-  // *** UPRAVENO: Nyní pracuje s 'itemId' a zobrazuje správné jméno ***
-  const removeFromCart = (itemId) => {
-    // Najdeme item, abychom mohli zobrazit správné jméno v toastu
-    const itemToRemove = cart.find((item) => item.id === itemId);
-    if (!itemToRemove) return;
-
-    setCart((prevCart) => prevCart.filter((item) => item.id !== itemId));
-    
-    const name = itemToRemove.type === 'product'
-      ? PRODUCT_DATA[itemToRemove.id].name
-      : itemToRemove.customDetails.name;
-      
-    showToast(`"${name}" odebrán z košíku.`);
+  const removeFromCart = (productId) => {
+    setCart((prevCart) => prevCart.filter((item) => item.id !== productId));
+    showToast(`"${PRODUCT_DATA[productId].name}" odebrán z košíku.`);
   };
 
   const clearCart = () => {
@@ -532,9 +1470,11 @@ const AppProvider = ({ children }) => {
 
   const selectShippingOption = (optionId) => {
     setShippingOptionId(optionId);
+    // *** UPRAVENO: Vždy resetuje vybrané místo ***
     setSelectedPickupPoint(null);
   };
 
+  // *** UPRAVENO: Přijímá celý objekt nebo null ***
   const selectPickupPoint = (point) => {
     setSelectedPickupPoint(point);
   };
@@ -543,41 +1483,29 @@ const AppProvider = ({ children }) => {
     setShippingAddressState((prev) => ({ ...prev, ...address }));
   };
 
-  // *** UPRAVENO: `submitOrder` nyní rozpoznává 'product' a 'custom' typy ***
+  // ==================================================================
+  // ### KROK 3 - ZMĚNA #2: Celá funkce `submitOrder` je nahrazena ###
+  // ==================================================================
   const submitOrder = async (contactDetails, orderDetails, shippingOption, pickupPoint) => {
-    setIsSubmitting(true);
+    setIsSubmitting(true); // Začínáme odesílat
     
+    // Vygenerujeme ID objednávky na straně klienta, abychom ho mohli hned použít
     const mockOrderId = `2025-${Math.floor(Math.random() * 1000) + 1}`;
 
-    // *** ZDE JE KLÍČOVÁ ÚPRAVA ***
-    // Sestavíme detaily položek tak, aby jim serverless funkce rozuměla
-    const itemsWithDetails = orderDetails.items.map(item => {
-        if (item.type === 'product') {
-            // Standardní produkt
-            return {
-                id: item.id,
-                quantity: item.quantity,
-                productName: PRODUCT_DATA[item.id].name,
-                price: PRODUCT_DATA[item.id].price
-            };
-        }
-        // Zakázkový produkt
-        // Všechny potřebné informace vložíme do 'productName',
-        // protože víme, že `api/send-order-email.js` toto pole vypisuje.
-        return {
-             id: item.id,
-             quantity: item.quantity,
-             productName: `${item.customDetails.name} (Soubor: ${item.customDetails.fileName}, ${item.customDetails.volumeCm3.toFixed(2)} cm³, ${item.customDetails.material})`,
-             price: item.customDetails.price,
-        };
-    });
+    // Přidáme názvy produktů a ceny za kus pro jednodušší zobrazení v e-mailu
+    const itemsWithDetails = orderDetails.items.map(item => ({
+        ...item,
+        productName: PRODUCT_DATA[item.id].name,
+        price: PRODUCT_DATA[item.id].price
+    }));
 
     const finalOrderDetails = {
         ...orderDetails,
         orderId: mockOrderId,
-        items: itemsWithDetails, // Použijeme upravené položky
+        items: itemsWithDetails,
     };
 
+    // Data, která pošleme na naši serverless funkci
     const payload = {
       contact: contactDetails,
       order: finalOrderDetails,
@@ -586,6 +1514,7 @@ const AppProvider = ({ children }) => {
     };
 
     try {
+      // Použijeme fetch pro odeslání dat na naši API route
       const response = await fetch('/api/send-order-email', {
         method: 'POST',
         headers: {
@@ -594,14 +1523,16 @@ const AppProvider = ({ children }) => {
         body: JSON.stringify(payload),
       });
 
+      // Pokud odpověď serveru není v pořádku (např. chyba 500), vyvoláme chybu
       if (!response.ok) {
         throw new Error('Chyba při odesílání objednávky.');
       }
 
+      // Pokud je vše v pořádku, vytvoříme potvrzení a přesměrujeme
       const confirmation = {
         orderId: mockOrderId,
         contact: contactDetails,
-        order: orderDetails, // Zde použijeme PŮVODNÍ orderDetails (s 'cart' polem) pro zobrazení na frontend
+        order: orderDetails, // Použijeme původní orderDetails pro zobrazení
         shippingOption: shippingOption,
         pickupPoint: pickupPoint,
       };
@@ -612,9 +1543,10 @@ const AppProvider = ({ children }) => {
 
     } catch (error) {
       console.error("Failed to submit order:", error);
+      // Zobrazíme uživateli chybovou hlášku
       showToast('Nastala chyba při odesílání objednávky. Zkuste to prosím znovu.');
     } finally {
-        setIsSubmitting(false);
+        setIsSubmitting(false); // Ukončíme odesílání (ať už úspěšně nebo ne)
     }
   };
 
@@ -624,17 +1556,9 @@ const AppProvider = ({ children }) => {
     return cart.reduce((total, item) => total + item.quantity, 0);
   }, [cart]);
 
-  // *** UPRAVENO: `cartSubtotal` nyní rozpoznává 'product' a 'custom' typy ***
   const cartSubtotal = useMemo(() => {
     return cart.reduce((total, item) => {
-      if (item.type === 'product') {
-        return total + PRODUCT_DATA[item.id].price * item.quantity;
-      }
-      if (item.type === 'custom') {
-        // U zakázkového tisku je cena uložena přímo v objektu
-        return total + item.customDetails.price * item.quantity;
-      }
-      return total; // Pro jistotu
+      return total + PRODUCT_DATA[item.id].price * item.quantity;
     }, 0);
   }, [cart]);
 
@@ -649,6 +1573,9 @@ const AppProvider = ({ children }) => {
     return cartSubtotal + shippingCost;
   }, [cartSubtotal, shippingCost]);
 
+  // ==================================================================
+  // ### KROK 3 - ZMĚNA #3: Přidán `isSubmitting` do hodnoty kontextu ###
+  // ==================================================================
   const value = {
     currentPage,
     currentProduct,
@@ -658,10 +1585,9 @@ const AppProvider = ({ children }) => {
     shippingAddress,
     toastMessage,
     orderConfirmation,
-    isSubmitting,
+    isSubmitting, // <-- PŘIDÁNO ZDE
     navigateTo,
     addToCart,
-    addCustomItemToCart, // *** NOVINKA: Přidáno do kontextu ***
     updateCartItemQuantity,
     removeFromCart,
     clearCart,
@@ -690,7 +1616,7 @@ const useAppContext = () => {
 
 
 // --- UI KOMPONENTY (SHADCN/UI NÁHRADA) ---
-// (Všechny stávající komponenty - Button, Input, atd. - zůstávají beze změny)
+// (Komponenty Button, Input, Textarea, Label, RadioGroup, Tabs, Progress, Badge, Card, Toast, ImageWithFallback, StarRating zůstávají beze změny)
 
 // Button
 const Button = forwardRef(
@@ -984,11 +1910,9 @@ const StarRating = ({ rating, size = 20 }) => {
   );
 };
 
-
 // --- KOMPONENTY STRÁNEK ---
 
 // Header
-// *** UPRAVENO: Přidán link na 'Zakázkový tisk' ***
 const Header = () => {
   const { navigateTo, totalCartItems } = useAppContext();
   
@@ -1019,8 +1943,6 @@ const Header = () => {
         <div className="hidden items-center gap-6 md:flex">
           <Button variant="link" onClick={() => navigateTo('home')}>Domů</Button>
           <Button variant="link" onClick={() => navigateTo('product', 'fox')}>Kolekce</Button>
-          {/* NOVÝ ODKAZ */}
-          <Button variant="link" onClick={() => navigateTo('customPrint')}>Zakázkový tisk</Button>
           <Button variant="link" onClick={() => navigateTo('printing')}>3D Tisk & Kvalita</Button>
           <Button variant="link" onClick={() => navigateTo('contact')}>Kontakt</Button>
         </div>
@@ -1053,7 +1975,6 @@ const Header = () => {
 };
 
 // Footer
-// *** UPRAVENO: Přidán link na 'Zakázkový tisk' ***
 const Footer = () => {
   const { navigateTo } = useAppContext();
   
@@ -1069,7 +1990,7 @@ const Footer = () => {
             <span className="text-lg font-bold">3D PŘÍVĚSKY</span>
           </div>
           <p className="text-sm text-gray-300">
-            Originální 3D tištěné přívěsky a zakázkový 3D tisk. Precizní design, česká výroba.
+            Originální 3D tištěné přívěsky. Precizní design, česká výroba, jednotná cena 59 Kč.
           </p>
         </div>
         
@@ -1079,8 +2000,6 @@ const Footer = () => {
           <ul className="space-y-1 text-sm text-gray-300">
             <li><Button variant="link" className="p-0 text-gray-300 hover:text-white" onClick={() => navigateTo('home')}>Domů</Button></li>
             <li><Button variant="link" className="p-0 text-gray-300 hover:text-white" onClick={() => navigateTo('product', 'fox')}>Kolekce</Button></li>
-            {/* NOVÝ ODKAZ */}
-            <li><Button variant="link" className="p-0 text-gray-300 hover:text-white" onClick={() => navigateTo('customPrint')}>Zakázkový tisk</Button></li>
             <li><Button variant="link" className="p-0 text-gray-300 hover:text-white" onClick={() => navigateTo('printing')}>3D Tisk & Kvalita</Button></li>
             <li><Button variant="link" className="p-0 text-gray-300 hover:text-white" onClick={() => navigateTo('contact')}>Kontakt</Button></li>
           </ul>
@@ -1156,7 +2075,7 @@ const ProductCard = ({ product }) => {
   );
 };
 
-// Domovská stránka (beze změny)
+// Domovská stránka
 const HomePage = () => {
   const { navigateTo } = useAppContext();
   
@@ -1287,7 +2206,7 @@ const HomePage = () => {
   );
 };
 
-// Detail produktu (beze změny)
+// Detail produktu
 const ProductDetailPage = () => {
   const { currentProduct, navigateTo, addToCart } = useAppContext();
   const product = PRODUCT_DATA[currentProduct];
@@ -1443,7 +2362,7 @@ const ProductDetailPage = () => {
   );
 };
 
-// *** UPRAVENO: Stránka košíku nyní zobrazuje i zakázkové položky ***
+// Stránka košíku
 const CartPage = () => {
   const { cart, navigateTo, updateCartItemQuantity, removeFromCart, totalCartItems, cartSubtotal, shippingCost, totalPrice } = useAppContext();
   
@@ -1477,47 +2396,36 @@ const CartPage = () => {
               <h2 className="text-2xl font-semibold">Produkty v košíku ({totalCartItems})</h2>
               <div className="space-y-4">
                 {cart.map(item => {
-                  // *** ZDE JE KLÍČOVÁ ÚPRAVA ***
-                  const isCustom = item.type === 'custom';
-                  // Sjednotíme data, ať už jsou z PRODUCT_DATA nebo customDetails
-                  const productData = isCustom ? item.customDetails : PRODUCT_DATA[item.id];
-                  
-                  // Získáme specifické hodnoty
-                  const imageUrl = isCustom ? productData.imageUrl : productData.images[0];
-                  const productName = productData.name;
-                  const productSubtitle = isCustom ? `Soubor: ${productData.fileName}` : productData.subtitle;
-                  const itemPrice = isCustom ? productData.price : productData.price;
-                  
+                  const product = PRODUCT_DATA[item.id];
                   return (
                     <Card key={item.id} className="flex flex-col gap-4 p-4 md:flex-row md:items-center">
                       <ImageWithFallback
-                        src={imageUrl}
-                        alt={productName}
-                        className={`h-24 w-24 flex-shrink-0 rounded-md object-cover ${!isCustom && 'cursor-pointer'}`}
-                        onClick={!isCustom ? () => navigateTo('product', item.id) : undefined}
+                        src={product.images[0]}
+                        alt={product.name}
+                        className="h-24 w-24 flex-shrink-0 cursor-pointer rounded-md object-cover"
+                        onClick={() => navigateTo('product', item.id)}
                       />
                       <div className="flex-1 space-y-2">
                         <h3 
-                          className={`text-lg font-medium ${!isCustom && 'cursor-pointer hover:underline'}`}
-                          onClick={!isCustom ? () => navigateTo('product', item.id) : undefined}
+                          className="text-lg font-medium cursor-pointer hover:underline"
+                          onClick={() => navigateTo('product', item.id)}
                         >
-                          {productName}
+                          {product.name}
                         </h3>
-                        <p className="text-sm text-gray-600">{productSubtitle}</p>
+                        <p className="text-sm text-gray-600">{product.subtitle}</p>
                         {/* Quantity controls */}
                         <div className="flex w-fit items-center rounded-md border">
-                          <Button variant="ghost" size="icon" onClick={() => updateCartItemQuantity(item.id, item.quantity - 1)} className="h-9 w-9 rounded-r-none border-r" disabled={isCustom}>
+                          <Button variant="ghost" size="icon" onClick={() => updateCartItemQuantity(item.id, item.quantity - 1)} className="h-9 w-9 rounded-r-none border-r">
                             <IconMinus size={14} />
                           </Button>
                           <span className="w-10 text-center text-base font-medium">{item.quantity}</span>
-                          <Button variant="ghost" size="icon" onClick={() => updateCartItemQuantity(item.id, item.quantity + 1)} className="h-9 w-9 rounded-l-none border-l" disabled={isCustom}>
+                          <Button variant="ghost" size="icon" onClick={() => updateCartItemQuantity(item.id, item.quantity + 1)} className="h-9 w-9 rounded-l-none border-l">
                             <IconPlus size={14} />
                           </Button>
                         </div>
-                        {isCustom && <p className="text-xs text-gray-500">Množství zakázkového tisku nelze měnit.</p>}
                       </div>
                       <div className="flex items-center gap-4 md:flex-col md:items-end">
-                        <p className="text-lg font-semibold">{item.quantity * itemPrice} Kč</p>
+                        <p className="text-lg font-semibold">{item.quantity * product.price} Kč</p>
                         <Button variant="ghost" size="icon" onClick={() => removeFromCart(item.id)}>
                           <IconTrash size={18} className="text-gray-600 hover:text-red-600" />
                         </Button>
@@ -1528,7 +2436,7 @@ const CartPage = () => {
               </div>
             </div>
             
-            {/* Pravý sloupec - Souhrn (bez úprav, `cartSubtotal` a `totalPrice` jsou již upraveny v kontextu) */}
+            {/* Pravý sloupec - Souhrn */}
             <div className="lg:col-span-1">
               <div className="sticky top-28 space-y-6 rounded-lg bg-gray-50/70 p-6 shadow-sm">
                 <h2 className="text-2xl font-semibold">Souhrn objednávky</h2>
@@ -1584,7 +2492,7 @@ const CartPage = () => {
   );
 };
 
-// *** UPRAVENO: Stránka Checkout nyní zobrazuje i zakázkové položky v souhrnu ***
+// Stránka Checkout
 const CheckoutPage = () => {
   const {
     navigateTo,
@@ -1600,6 +2508,9 @@ const CheckoutPage = () => {
     cartSubtotal,
     shippingCost,
     totalPrice,
+    // ==================================================================
+    // ### KROK 3 - ZMĚNA #4: Načtení `isSubmitting` z kontextu ###
+    // ==================================================================
     isSubmitting 
   } = useAppContext();
   
@@ -1695,7 +2606,6 @@ const CheckoutPage = () => {
         address: isAddressDelivery ? shippingAddress : null
     };
     
-    // `cart` již obsahuje všechny potřebné informace
     const orderDetails = {
         items: cart,
         subtotal: cartSubtotal,
@@ -1735,7 +2645,7 @@ const CheckoutPage = () => {
             </div>
         ) : (
             <div className="grid grid-cols-1 gap-12 lg:grid-cols-3">
-            {/* Levý sloupec - Formuláře (beze změny) */}
+            {/* Levý sloupec - Formuláře */}
             <div className="space-y-8 lg:col-span-2">
                 
                 {/* Kontaktní údaje */}
@@ -1866,27 +2776,21 @@ const CheckoutPage = () => {
                 {/* Miniatury produktů */}
                 <div className="space-y-3 border-b pb-4">
                     {cart.map(item => {
-                      // *** ZDE JE KLÍČOVÁ ÚPRAVA ***
-                      const isCustom = item.type === 'custom';
-                      const productData = isCustom ? item.customDetails : PRODUCT_DATA[item.id];
-                      const imageUrl = isCustom ? productData.imageUrl : productData.images[0];
-                      const productName = productData.name;
-                      const itemPrice = isCustom ? productData.price : PRODUCT_DATA[item.id].price;
-
-                      return (
+                    const product = PRODUCT_DATA[item.id];
+                    return (
                         <div key={item.id} className="flex items-center gap-3">
                         <ImageWithFallback
-                            src={imageUrl}
-                            alt={productName}
+                            src={product.images[0]}
+                            alt={product.name}
                             className="h-12 w-12 rounded-md object-cover border"
                         />
                         <div className="flex-1 text-sm">
-                            <div className="font-medium">{productName}</div>
+                            <div className="font-medium">{product.name}</div>
                             <div className="text-gray-600">Množství: {item.quantity}</div>
                         </div>
-                        <div className="text-sm font-semibold">{item.quantity * itemPrice} Kč</div>
+                        <div className="text-sm font-semibold">{item.quantity * product.price} Kč</div>
                         </div>
-                      );
+                    );
                     })}
                 </div>
                 
@@ -1907,6 +2811,9 @@ const CheckoutPage = () => {
                     <span>{totalPrice} Kč</span>
                 </div>
                 
+                {/* ================================================================== */}
+                {/* ### KROK 3 - ZMĚNA #5: Úprava tlačítka pro zobrazení loading stavu ### */}
+                {/* ================================================================== */}
                 <Button 
                     size="lg" 
                     className="w-full" 
@@ -1932,7 +2839,7 @@ const CheckoutPage = () => {
   );
 };
 
-// *** UPRAVENO: Stránka potvrzení nyní zobrazuje i zakázkové položky ***
+// Stránka Potvrzení objednávky
 const ConfirmationPage = () => {
     const { orderConfirmation, navigateTo } = useAppContext();
 
@@ -1967,34 +2874,26 @@ const ConfirmationPage = () => {
                     {/* Shrnutí produktů */}
                     <div className="space-y-4 border-b pb-6">
                         <h3 className="text-lg font-medium">Položky</h3>
-                        {/* `order.items` je zde pole `CartItem` */}
                         {order.items.map(item => {
-                            // *** ZDE JE KLÍČOVÁ ÚPRAVA ***
-                            const isCustom = item.type === 'custom';
-                            const productData = isCustom ? item.customDetails : PRODUCT_DATA[item.id];
-                            const imageUrl = isCustom ? productData.imageUrl : productData.images[0];
-                            const productName = productData.name;
-                            const pricePerItem = isCustom ? productData.price : PRODUCT_DATA[item.id].price;
-
+                            const product = PRODUCT_DATA[item.id];
                             return (
                                 <div key={item.id} className="flex items-center gap-4">
                                     <ImageWithFallback
-                                        src={imageUrl}
-                                        alt={productName}
+                                        src={product.images[0]}
+                                        alt={product.name}
                                         className="h-16 w-16 rounded-md object-cover border"
                                     />
                                     <div className="flex-1 text-sm">
-                                        <div className="font-medium">{productName}</div>
-                                        {isCustom && <div className="text-gray-600 text-xs">Soubor: {productData.fileName}</div>}
+                                        <div className="font-medium">{product.name}</div>
                                         <div className="text-gray-600">Množství: {item.quantity}</div>
                                     </div>
-                                    <div className="text-sm font-semibold">{item.quantity * pricePerItem} Kč</div>
+                                    <div className="text-sm font-semibold">{item.quantity * product.price} Kč</div>
                                 </div>
                             );
                         })}
                     </div>
 
-                    {/* Ceny (beze změny, `order` objekt má již správné součty) */}
+                    {/* Ceny */}
                     <div className="space-y-3 border-b pb-6">
                          <div className="flex justify-between text-gray-700">
                             <span>Mezisoučet:</span>
@@ -2010,7 +2909,7 @@ const ConfirmationPage = () => {
                         </div>
                     </div>
 
-                    {/* Doručovací údaje (beze změny) */}
+                    {/* Doručovací údaje */}
                     <div className="space-y-4">
                         <h3 className="text-lg font-medium">Doručovací údaje</h3>
                         <div className="text-gray-700">
@@ -2024,6 +2923,7 @@ const ConfirmationPage = () => {
                                 <p>{contact.address.zip} {contact.address.city}</p>
                             </div>
                         ) : (
+                             // *** UPRAVENO: Zobrazení detailů z objektu místa ***
                              <div className="text-gray-700">
                                 <p className="font-medium">Vyzvednutí na místě:</p>
                                 <p><strong>{pickupPoint?.name}</strong></p>
@@ -2046,7 +2946,7 @@ const ConfirmationPage = () => {
 };
 
 
-// Stránka Kontaktu (beze změny)
+// Stránka Kontaktu
 const ContactPage = () => {
   const { navigateTo, showToast } = useAppContext();
   
@@ -2146,7 +3046,7 @@ const ContactPage = () => {
   );
 };
 
-// Stránka o 3D tisku (beze změny)
+// Stránka o 3D tisku
 const PrintingInfoPage = () => {
   const { navigateTo } = useAppContext();
   
@@ -2290,386 +3190,6 @@ const PrintingInfoPage = () => {
 };
 
 
-// *** NOVINKA: Stránka pro zakázkový tisk ***
-const CustomPrintPage = () => {
-  const { addCustomItemToCart, showToast } = useAppContext();
-  const [file, setFile] = useState(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [isCalculating, setIsCalculating] = useState(false);
-  const [calcResult, setCalcResult] = useState(null); // { volumeCm3, weightG, timeH, materialCost, timeCost, totalPrice }
-  
-  // Nastavení tisku
-  const [material, setMaterial] = useState('PLA');
-  const [quality, setQuality] = useState(0.2); // 0.2mm (Standard)
-  
-  // Ceník (můžete si ho upravit)
-  const PRICE_SETUP_FEE = 50; // Kč, základní poplatek za přípravu
-  const PRICE_PER_GRAM_PLA = 2.5; // Kč/g
-  const PRICE_PER_GRAM_PETG = 3.0; // Kč/g
-  const PRICE_PER_HOUR = 30; // Kč/h
-  
-  const DENSITY_PLA = 1.24; // g/cm³
-  const DENSITY_PETG = 1.27; // g/cm³
-
-  // Zjednodušený výpočet času tisku (upravte podle vaší tiskárny)
-  // cm³/h pro různé kvality
-  const PRINT_SPEEDS = {
-      0.1: 10, // Vysoká kvalita (pomalé)
-      0.2: 18, // Standardní kvalita
-      0.3: 25, // Nízká kvalita (rychlé)
-  };
-  
-  const fileInputRef = React.useRef(null);
-  
-  // Funkce pro výpočet objemu modelu
-  const calculateVolume = (geometry) => {
-      if (!geometry.isBufferGeometry) {
-          console.error("Geometrie není BufferGeometry");
-          return 0;
-      }
-      
-      const positions = geometry.attributes.position.array;
-      let volume = 0;
-      
-      const p1 = new THREE.Vector3();
-      const p2 = new THREE.Vector3();
-      const p3 = new THREE.Vector3();
-      
-      for (let i = 0; i < positions.length; i += 9) {
-          p1.set(positions[i], positions[i+1], positions[i+2]);
-          p2.set(positions[i+3], positions[i+4], positions[i+5]);
-          p3.set(positions[i+6], positions[i+7], positions[i+8]);
-          
-          // Výpočet objemu tetraedru (orientovaného)
-          volume += p1.dot(p2.clone().cross(p3)) / 6.0;
-      }
-      
-      // STL je často v mm^3, převedeme na cm^3
-      return Math.abs(volume / 1000.0);
-  };
-  
-  // Funkce pro zpracování nahraného souboru
-  const processFile = (uploadedFile) => {
-      if (!uploadedFile) return;
-      
-      // Podporujeme pouze .stl
-      if (!uploadedFile.name.toLowerCase().endsWith('.stl')) {
-          showToast('Chyba: Podporovány jsou pouze soubory .stl');
-          return;
-      }
-      
-      setFile(uploadedFile);
-      setIsCalculating(true);
-      setCalcResult(null);
-      
-      const reader = new FileReader();
-      
-      reader.onload = (event) => {
-          try {
-              const contents = event.target.result;
-              const loader = new THREE.STLLoader();
-              const geometry = loader.parse(contents);
-              
-              const volumeCm3 = calculateVolume(geometry);
-              
-              if (volumeCm3 === 0) {
-                  throw new Error("Nepodařilo se vypočítat objem modelu.");
-              }
-
-              // Spuštění kalkulace ceny
-              calculatePrice(volumeCm3, uploadedFile.name);
-
-          } catch (error) {
-              console.error("Chyba při parsování STL:", error);
-              showToast("Chyba při zpracování .stl souboru. Je soubor validní?");
-              setIsCalculating(false);
-              setFile(null);
-          }
-      };
-      
-      reader.onerror = () => {
-          showToast("Chyba při čtení souboru.");
-          setIsCalculating(false);
-          setFile(null);
-      };
-      
-      reader.readAsArrayBuffer(uploadedFile);
-  };
-  
-  // Funkce pro výpočet ceny (spouští se po výpočtu objemu)
-  const calculatePrice = (volumeCm3, fileName) => {
-      const density = material === 'PLA' ? DENSITY_PLA : DENSITY_PETG;
-      const pricePerGram = material === 'PLA' ? PRICE_PER_GRAM_PLA : PRICE_PER_GRAM_PETG;
-      const speed = PRINT_SPEEDS[quality];
-      
-      const weightG = volumeCm3 * density;
-      const materialCost = weightG * pricePerGram;
-      
-      const timeH = volumeCm3 / speed;
-      const timeCost = timeH * PRICE_PER_HOUR;
-      
-      const totalPrice = PRICE_SETUP_FEE + materialCost + timeCost;
-      
-      setCalcResult({
-          fileName: fileName,
-          volumeCm3: volumeCm3,
-          weightG: weightG,
-          timeH: timeH,
-          materialCost: materialCost,
-          timeCost: timeCost,
-          totalPrice: Math.ceil(totalPrice), // Zaokrouhlíme nahoru na celé Kč
-      });
-      setIsCalculating(false);
-  };
-  
-  // Přepočítání ceny při změně nastavení
-  useEffect(() => {
-      if (calcResult && file) {
-          // Máme již vypočtený objem, stačí přepočítat cenu
-          setIsCalculating(true);
-          // Krátká pauza pro UI
-          setTimeout(() => {
-              calculatePrice(calcResult.volumeCm3, calcResult.fileName);
-          }, 100);
-      }
-  }, [material, quality]); // Sledujeme změny materiálu a kvality
-  
-
-  const handleDragEvents = (e, isOver) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setDragOver(isOver);
-  };
-  
-  const handleDrop = (e) => {
-      handleDragEvents(e, false);
-      const droppedFile = e.dataTransfer.files[0];
-      if (droppedFile) {
-          processFile(droppedFile);
-      }
-  };
-  
-  const handleFileChange = (e) => {
-      const selectedFile = e.target.files[0];
-      if (selectedFile) {
-          processFile(selectedFile);
-      }
-  };
-
-  const handleAddToCart = () => {
-      if (!calcResult || !file) return;
-
-      const customItem = {
-          id: `custom_${new Date().getTime()}`, // Unikátní ID
-          quantity: 1,
-          type: 'custom',
-          customDetails: {
-              name: "Zakázkový 3D tisk",
-              price: calcResult.totalPrice,
-              fileName: calcResult.fileName,
-              volumeCm3: calcResult.volumeCm3,
-              material: material,
-              imageUrl: IMAGES.custom_print_placeholder,
-          }
-      };
-      
-      addCustomItemToCart(customItem);
-      
-      // Reset formuláře
-      setFile(null);
-      setCalcResult(null);
-      setMaterial('PLA');
-      setQuality(0.2);
-      if(fileInputRef.current) {
-          fileInputRef.current.value = null;
-      }
-  };
-
-  return (
-    <React.Fragment>
-      <section 
-        className="bg-gray-900 bg-cover bg-center"
-        style={{ backgroundImage: `url(${IMAGES.custom_print_hero})` }}
-      >
-        <div className="bg-black bg-opacity-60">
-            <div className="container mx-auto max-w-7xl px-4 py-16 text-center text-white">
-                <IconCube size={64} className="mx-auto" />
-                <h1 className="mt-6 text-4xl font-bold tracking-tighter">Zakázkový 3D tisk</h1>
-                <p className="mt-4 text-lg text-gray-200">
-                    Nahrajte svůj .stl model a získejte okamžitou cenovou kalkulaci.
-                </p>
-            </div>
-        </div>
-      </section>
-      
-      <section className="container mx-auto max-w-7xl px-4 py-16">
-        <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
-            
-            {/* Levá strana - Upload a Nastavení */}
-            <div className="space-y-8">
-                {/* 1. Krok - Upload */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-2xl">1. Nahrajte váš model</CardTitle>
-                        <CardDescription>Podporujeme pouze soubory ve formátu .stl</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <input
-                            type="file"
-                            accept=".stl"
-                            onChange={handleFileChange}
-                            ref={fileInputRef}
-                            className="hidden"
-                            id="file-upload"
-                        />
-                        <div
-                            className={`file-upload-area ${dragOver ? 'drag-over' : ''}`}
-                            onClick={() => fileInputRef.current && fileInputRef.current.click()}
-                            onDragOver={(e) => handleDragEvents(e, true)}
-                            onDragLeave={(e) => handleDragEvents(e, false)}
-                            onDrop={handleDrop}
-                        >
-                            <IconUploadCloud size={48} className="mx-auto text-gray-400" />
-                            <p className="mt-4 font-semibold text-black">Klikněte nebo přetáhněte soubor sem</p>
-                            <p className="text-sm text-gray-600">Maximální velikost souboru: 25 MB</p>
-                        </div>
-                        
-                        {file && !isCalculating && calcResult && (
-                             <div className="mt-4 flex items-center gap-3 rounded-lg border bg-gray-50 p-4">
-                                <IconFile size={32} className="text-green-600 flex-shrink-0" />
-                                <div className="flex-1">
-                                    <p className="font-medium text-black truncate">{file.name}</p>
-                                    <p className="text-sm text-gray-600">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                                </div>
-                                <Button variant="ghost" size="sm" onClick={() => {
-                                    setFile(null);
-                                    setCalcResult(null);
-                                    if(fileInputRef.current) fileInputRef.current.value = null;
-                                }}>
-                                    <IconX size={16} />
-                                </Button>
-                             </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* 2. Krok - Nastavení */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-2xl">2. Zvolte parametry tisku</CardTitle>
-                        <CardDescription>Cena se automaticky přepočítá.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-6">
-                        {/* Výběr materiálu */}
-                        <div>
-                            <Label className="text-base font-medium">Materiál</Label>
-                            <RadioGroup value={material} onValueChange={setMaterial} name="material" className="mt-2">
-                                <RadioGroupItem value="PLA" id="mat-pla">
-                                    <div className="flex-1">
-                                        <p className="font-medium">PLA (Standard)</p>
-                                        <p className="text-sm text-gray-600">Pevný a ekologický. Ideální pro většinu modelů.</p>
-                                    </div>
-                                    <span className="text-sm font-semibold">{PRICE_PER_GRAM_PLA.toFixed(2)} Kč/g</span>
-                                </RadioGroupItem>
-                                <RadioGroupItem value="PETG" id="mat-petg">
-                                     <div className="flex-1">
-                                        <p className="font-medium">PETG (Odolný)</p>
-                                        <p className="text-sm text-gray-600">Vyšší tepelná a mechanická odolnost.</p>
-                                    </div>
-                                    <span className="text-sm font-semibold">{PRICE_PER_GRAM_PETG.toFixed(2)} Kč/g</span>
-                                </RadioGroupItem>
-                            </RadioGroup>
-                        </div>
-                        
-                        {/* Výběr kvality */}
-                        <div>
-                            <Label className="text-base font-medium">Kvalita (Výška vrstvy)</Label>
-                            <RadioGroup value={quality} onValueChange={(val) => setQuality(parseFloat(val))} name="quality" className="mt-2">
-                                <RadioGroupItem value={0.1} id="q-high">
-                                    <p className="font-medium">Vysoká (0.1 mm)</p>
-                                </RadioGroupItem>
-                                <RadioGroupItem value={0.2} id="q-std">
-                                    <p className="font-medium">Standardní (0.2 mm)</p>
-                                </RadioGroupItem>
-                                <RadioGroupItem value={0.3} id="q-low">
-                                    <p className="font-medium">Nízká (0.3 mm)</p>
-                                </RadioGroupItem>
-                            </RadioGroup>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-            
-            {/* Pravá strana - Kalkulace */}
-            <div className="lg:sticky top-28 h-fit">
-                <Card className="bg-gray-50/70 shadow-lg">
-                    <CardHeader>
-                        <CardTitle className="text-2xl">3. Cenová kalkulace</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        
-                        {/* Načítání nebo výsledek */}
-                        {isCalculating ? (
-                            <div className="flex flex-col items-center justify-center h-48">
-                                <IconLoader size={48} className="text-black" />
-                                <p className="mt-4 text-lg font-medium">Počítám cenu...</p>
-                            </div>
-                        ) : !calcResult ? (
-                            <div className="flex flex-col items-center justify-center h-48 text-center">
-                                <IconCube size={48} className="text-gray-400" />
-                                <p className="mt-4 text-lg text-gray-700">Prosím, nahrajte .stl soubor pro spuštění kalkulace.</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-700">Příprava tisku (fixní):</span>
-                                        <span className="font-medium">{PRICE_SETUP_FEE.toFixed(2)} Kč</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-700">Cena materiálu ({material}):</span>
-                                        <span className="font-medium">{calcResult.materialCost.toFixed(2)} Kč</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-700">Cena tiskového času:</span>
-                                        <span className="font-medium">{calcResult.timeCost.toFixed(2)} Kč</span>
-                                    </div>
-                                </div>
-                                <div className="border-t pt-4">
-                                    <div className="flex justify-between text-2xl font-bold text-black">
-                                        <span>Celková cena:</span>
-                                        <span>{calcResult.totalPrice.toFixed(2)} Kč</span>
-                                    </div>
-                                </div>
-                                
-                                <Button size="lg" className="w-full" onClick={handleAddToCart}>
-                                    <IconShoppingBag size={18} className="mr-2" />
-                                    Vložit do košíku
-                                </Button>
-                                
-                                <div className="text-xs text-gray-600 space-y-1 pt-2">
-                                    <p><strong>Soubor:</strong> {calcResult.fileName}</p>
-                                    <p><strong>Odhadovaný objem:</strong> {calcResult.volumeCm3.toFixed(2)} cm³</p>
-                                    <p><strong>Odhadovaná váha:</strong> {calcResult.weightG.toFixed(1)} g</p>
-                                    <p><strong>Odhadovaný čas:</strong> {calcResult.timeH.toFixed(1)} h</p>
-                                </div>
-                                <p className="text-xs text-gray-500 italic text-center">
-                                    Toto je pouze odhad. Cena je finální, ale čas tisku se může lišit.
-                                </p>
-                            </div>
-                        )}
-                        
-                    </CardContent>
-                </Card>
-            </div>
-            
-        </div>
-      </section>
-    </React.Fragment>
-  );
-};
-
-
 // --- HLAVNÍ KOMPONENTA APLIKACE ---
 
 function App() {
@@ -2690,7 +3210,6 @@ function App() {
 }
 
 // Router
-// *** UPRAVENO: Přidán 'case' pro 'customPrint' ***
 const PageContent = () => {
   const { currentPage } = useAppContext();
   
@@ -2709,9 +3228,6 @@ const PageContent = () => {
       return <ContactPage />;
     case 'printing':
       return <PrintingInfoPage />;
-    // *** NOVINKA: Směrování na novou stránku ***
-    case 'customPrint':
-        return <CustomPrintPage />;
     default:
       return <HomePage />;
   }
@@ -2724,3 +3240,4 @@ root.render(<App />);
     </script>
 </body>
 </html>
+--- KONEC: index.html ---
