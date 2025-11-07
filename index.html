@@ -102,7 +102,7 @@ interface CartItem {
     price: number;
     fileName: string;
     volumeCm3: number; // Objem v cm^3
-    material: string; // Vybraný materiál
+    material: string; // Vybraný materiál (včetně barvy)
     imageUrl: string; // Placeholder obrázek
   };
 }
@@ -242,6 +242,17 @@ const PRODUCT_DATA = {
     },
   },
 };
+
+// *** NOVINKA: Seznam barev pro PLA ***
+const PLA_COLORS = [
+  { id: 'cerna', name: 'Černá', hex: '#000000' },
+  { id: 'bila', name: 'Bílá', hex: '#FFFFFF' },
+  { id: 'cervena', name: 'Červená', hex: '#FF0000' },
+  { id: 'modra', name: 'Modrá', hex: '#0000FF' },
+  { id: 'zluta', name: 'Žlutá', hex: '#FFFF00' },
+  { id: 'zelena', name: 'Zelená', hex: '#008000' },
+  { id: 'duhova', name: 'Duhová', hex: 'linear-gradient(to right, #E8141E, #F77F00, #FCF60C, #56A00E, #0077E1, #6200B3)' },
+];
 
 // --- IKONY (LUCIDE-REACT NÁHRADA) ---
 // (Ikony zůstávají beze změny... přidána IconCube)
@@ -768,10 +779,11 @@ const RadioGroup = ({
   onValueChange,
   name,
   children,
+  className = "" // Přidána className
 }) => {
   return (
     <RadioGroupContext.Provider value={{ name: name || 'radio-group', value, onChange: onValueChange }}>
-      <div role="radiogroup" className="space-y-2">
+      <div role="radiogroup" className={`space-y-2 ${className}`}> {/* Použita className */}
         {children}
       </div>
     </RadioGroupContext.Provider>
@@ -1986,6 +1998,7 @@ const ConfirmationPage = () => {
                                     <div className="flex-1 text-sm">
                                         <div className="font-medium">{productName}</div>
                                         {isCustom && <div className="text-gray-600 text-xs">Soubor: {productData.fileName}</div>}
+                                        {isCustom && <div className="text-gray-600 text-xs">Materiál: {productData.material}</div>}
                                         <div className="text-gray-600">Množství: {item.quantity}</div>
                                     </div>
                                     <div className="text-sm font-semibold">{item.quantity * pricePerItem} Kč</div>
@@ -2300,23 +2313,26 @@ const CustomPrintPage = () => {
   
   // Nastavení tisku
   const [material, setMaterial] = useState('PLA');
+  // *** ZMĚNA: Přidán stav pro barvu ***
+  const [color, setColor] = useState('cerna'); // Výchozí barva
   const [quality, setQuality] = useState(0.2); // 0.2mm (Standard)
   
   // Ceník (můžete si ho upravit)
   const PRICE_SETUP_FEE = 50; // Kč, základní poplatek za přípravu
-  const PRICE_PER_GRAM_PLA = 2.5; // Kč/g
+  // *** ZMĚNA: Cena PLA upravena na 2.0 Kč/g ***
+  const PRICE_PER_GRAM_PLA = 2.0; // Kč/g
   const PRICE_PER_GRAM_PETG = 3.0; // Kč/g
   const PRICE_PER_HOUR = 30; // Kč/h
   
   const DENSITY_PLA = 1.24; // g/cm³
   const DENSITY_PETG = 1.27; // g/cm³
 
-  // Zjednodušený výpočet času tisku (upravte podle vaší tiskárny)
-  // cm³/h pro různé kvality
+  // *** ZMĚNA: Rychlosti tisku upraveny podle požadavku ***
   const PRINT_SPEEDS = {
-      0.1: 10, // Vysoká kvalita (pomalé)
+      // 0.1: 10, // Odebráno
       0.2: 18, // Standardní kvalita
-      0.3: 25, // Nízká kvalita (rychlé)
+      // 0.3: 25, // Odebráno
+      0.4: 35, // Rychlá kvalita (Nové) - odhad
   };
   
   const fileInputRef = React.useRef(null);
@@ -2402,6 +2418,13 @@ const CustomPrintPage = () => {
       const pricePerGram = material === 'PLA' ? PRICE_PER_GRAM_PLA : PRICE_PER_GRAM_PETG;
       const speed = PRINT_SPEEDS[quality];
       
+      // Kontrola pro případ, že by kvalita nebyla v PRINT_SPEEDS
+      if (!speed) {
+          showToast("Chyba: Neplatná kvalita tisku.");
+          setIsCalculating(false);
+          return;
+      }
+
       const weightG = volumeCm3 * density;
       const materialCost = weightG * pricePerGram;
       
@@ -2459,6 +2482,10 @@ const CustomPrintPage = () => {
   const handleAddToCart = () => {
       if (!calcResult || !file) return;
 
+      // *** ZMĚNA: Přidána barva do `material` popisu ***
+      const selectedColor = PLA_COLORS.find(c => c.id === color)?.name || color;
+      const materialDescription = material === 'PLA' ? `PLA (${selectedColor})` : 'PETG';
+
       const customItem = {
           id: `custom_${new Date().getTime()}`, // Unikátní ID
           quantity: 1,
@@ -2468,7 +2495,7 @@ const CustomPrintPage = () => {
               price: calcResult.totalPrice,
               fileName: calcResult.fileName,
               volumeCm3: calcResult.volumeCm3,
-              material: material,
+              material: materialDescription, // Uložíme finální popis materiálu
               imageUrl: IMAGES.custom_print_placeholder,
           }
       };
@@ -2480,6 +2507,7 @@ const CustomPrintPage = () => {
       setCalcResult(null);
       setMaterial('PLA');
       setQuality(0.2);
+      setColor('cerna'); // Reset barvy
       if(fileInputRef.current) {
           fileInputRef.current.value = null;
       }
@@ -2569,6 +2597,7 @@ const CustomPrintPage = () => {
                                         <p className="font-medium">PLA (Standard)</p>
                                         <p className="text-sm text-gray-600">Pevný a ekologický. Ideální pro většinu modelů.</p>
                                     </div>
+                                    {/* *** ZMĚNA: Cena upravena *** */}
                                     <span className="text-sm font-semibold">{PRICE_PER_GRAM_PLA.toFixed(2)} Kč/g</span>
                                 </RadioGroupItem>
                                 <RadioGroupItem value="PETG" id="mat-petg">
@@ -2579,20 +2608,48 @@ const CustomPrintPage = () => {
                                     <span className="text-sm font-semibold">{PRICE_PER_GRAM_PETG.toFixed(2)} Kč/g</span>
                                 </RadioGroupItem>
                             </RadioGroup>
+                            
+                            {/* *** NOVINKA: Výběr barvy (pouze pro PLA) *** */}
+                            {material === 'PLA' && (
+                                <div className="pt-4 border-t mt-6">
+                                    <Label className="text-base font-medium">Barva (PLA)</Label>
+                                    <RadioGroup 
+                                        value={color} 
+                                        onValueChange={setColor} 
+                                        name="color" 
+                                        className="mt-2 grid grid-cols-2 sm:grid-cols-3 gap-2 !space-y-0"
+                                    >
+                                        {PLA_COLORS.map(c => (
+                                            <RadioGroupItem key={c.id} value={c.id} id={`c-${c.id}`} className="p-2 !gap-2 justify-start">
+                                                <div className="flex items-center gap-2">
+                                                    <span 
+                                                        className="h-5 w-5 rounded-full" 
+                                                        style={{ 
+                                                            background: c.hex === '#FFFFFF' ? '#FFF' : c.hex, 
+                                                            border: c.hex === '#FFFFFF' ? '1px solid #ccc' : 'none' 
+                                                        }}
+                                                    ></span>
+                                                    <span className="font-medium text-sm">{c.name}</span>
+                                                </div>
+                                            </RadioGroupItem>
+                                        ))}
+                                    </RadioGroup>
+                                </div>
+                            )}
                         </div>
                         
-                        {/* Výběr kvality */}
+                        {/* *** ZMĚNA: Výběr kvality upraven *** */}
                         <div>
                             <Label className="text-base font-medium">Kvalita (Výška vrstvy)</Label>
                             <RadioGroup value={quality} onValueChange={(val) => setQuality(parseFloat(val))} name="quality" className="mt-2">
-                                <RadioGroupItem value={0.1} id="q-high">
-                                    <p className="font-medium">Vysoká (0.1 mm)</p>
-                                </RadioGroupItem>
+                                {/* ODSTRANĚNO: 0.1 mm */}
                                 <RadioGroupItem value={0.2} id="q-std">
                                     <p className="font-medium">Standardní (0.2 mm)</p>
                                 </RadioGroupItem>
-                                <RadioGroupItem value={0.3} id="q-low">
-                                    <p className="font-medium">Nízká (0.3 mm)</p>
+                                {/* ODSTRANĚNO: 0.3 mm */}
+                                {/* PŘIDÁNO: 0.4 mm */}
+                                <RadioGroupItem value={0.4} id="q-fast">
+                                    <p className="font-medium">Rychlá (0.4 mm)</p>
                                 </RadioGroupItem>
                             </RadioGroup>
                         </div>
@@ -2701,6 +2758,7 @@ const PageContent = () => {
       return <ProductDetailPage />;
     case 'cart':
       return <CartPage />;
+    // *** OPRAVA CHYBY: Odebrána dvojtečka navíc ***
     case 'checkout':
       return <CheckoutPage />;
     case 'confirmation':
