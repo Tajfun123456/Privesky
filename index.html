@@ -61,7 +61,8 @@
             width: 100% !important;
             height: 350px;
             display: block;
-            background-color: #f8fafc;
+            background-color: #f9fafb; /* Ještě světlejší pozadí, podobnější slicerům */
+            border-radius: 0.5rem;
         }
     </style>
 </head>
@@ -251,7 +252,7 @@ const PRODUCT_DATA = {
 };
 
 const PLA_COLORS = [
-  { id: 'cerna', name: 'Černá', hex: '#000000' },
+  { id: 'cerna', name: 'Černá', hex: '#222222' }, // Jemně světlejší černá pro lepší viditelnost detailů ve 3D
   { id: 'bila', name: 'Bílá', hex: '#FFFFFF' },
   { id: 'cervena', name: 'Červená', hex: '#FF0000' },
   { id: 'modra', name: 'Modrá', hex: '#0000FF' },
@@ -2226,14 +2227,14 @@ const PrintingInfoPage = () => {
 };
 
 
-// *** NOVINKA: 3D PROHLÍŽEČ PRO CUSTOM TISK ***
+// *** NOVINKA: VYLEPŠENÝ 3D PROHLÍŽEČ ***
 const ModelViewer = ({ file, color }) => {
     const mountRef = useRef(null);
     const sceneRef = useRef(new THREE.Scene());
-    const cameraRef = useRef(new THREE.PerspectiveCamera(75, 2, 0.1, 1000)); // Základní kamera
+    const cameraRef = useRef(new THREE.PerspectiveCamera(75, 2, 0.1, 1000));
     const rendererRef = useRef(null);
     const controlsRef = useRef(null);
-    const modelRef = useRef(null); // Reference na aktuální mesh modelu
+    const modelRef = useRef(null);
 
     // Hook pro inicializaci scény
     useEffect(() => {
@@ -2242,33 +2243,59 @@ const ModelViewer = ({ file, color }) => {
 
         // --- Inicializace ---
         const scene = sceneRef.current;
-        scene.background = new THREE.Color(0xf8fafc); // Světlé pozadí
+        scene.background = new THREE.Color(0xf9fafb); // Velmi světlé pozadí
+
+        // --- TISKOVÝ PROSTOR (Bambu Lab: 256x256x256mm) ---
+        // 1. Mřížka na dně (256x256mm, 32 dílků = 8mm čtverce)
+        const gridHelper = new THREE.GridHelper(256, 32, 0x888888, 0xe5e7eb);
+        scene.add(gridHelper);
+
+        // 2. Vizuální ohraničení tiskového prostoru (256x256x256mm)
+        const boxGeometry = new THREE.BoxGeometry(256, 256, 256);
+        const edges = new THREE.EdgesGeometry(boxGeometry);
+        // Jemná šedá linka pro ohraničení prostoru
+        const volumeMaterial = new THREE.LineBasicMaterial({ color: 0xcccccc, opacity: 0.4, transparent: true });
+        const volumeLines = new THREE.LineSegments(edges, volumeMaterial);
+        // Posuneme box nahoru tak, aby jeho dno bylo na Y=0 (na mřížce)
+        volumeLines.position.set(0, 128, 0);
+        scene.add(volumeLines);
 
         const camera = cameraRef.current;
-        camera.position.set(20, 20, 20); // Vzdálenější pozice
+        camera.position.set(200, 200, 200); // Kameru dáme dál, aby byl vidět celý prostor
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(mount.clientWidth, 350); // Použijeme výšku z CSS
+        renderer.setSize(mount.clientWidth, 350);
+        // Stíny pro lepší orientaci v prostoru
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        
         mount.appendChild(renderer.domElement);
         rendererRef.current = renderer;
 
         // --- Osvětlení ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
         scene.add(ambientLight);
 
+        const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444, 0.6 );
+        hemiLight.position.set( 0, 200, 0 );
+        scene.add( hemiLight );
+
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(50, 50, 50);
+        directionalLight.position.set(100, 200, 100);
+        directionalLight.castShadow = true;
+        // Nastavení stínů pro větší prostor
+        directionalLight.shadow.camera.top = 150;
+        directionalLight.shadow.camera.bottom = -150;
+        directionalLight.shadow.camera.left = -150;
+        directionalLight.shadow.camera.right = 150;
         scene.add(directionalLight);
-        
-        const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
-        directionalLight2.position.set(-50, 50, -50);
-        scene.add(directionalLight2);
 
         // --- Ovládání ---
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.1;
+        controls.maxPolarAngle = Math.PI / 2; // Nepovolíme pohled pod podložku
         controlsRef.current = controls;
 
         // --- Animační smyčka ---
@@ -2284,7 +2311,7 @@ const ModelViewer = ({ file, color }) => {
         const handleResize = () => {
              if (mountRef.current) {
                 const width = mountRef.current.clientWidth;
-                const height = 350; // Pevná výška
+                const height = 350;
                 renderer.setSize(width, height);
                 camera.aspect = width / height;
                 camera.updateProjectionMatrix();
@@ -2299,17 +2326,15 @@ const ModelViewer = ({ file, color }) => {
             if (mountRef.current && rendererRef.current) {
                 mountRef.current.removeChild(rendererRef.current.domElement);
             }
-            // Vyčištění scény
             while(scene.children.length > 0){ 
                 scene.remove(scene.children[0]); 
             }
         };
-    }, []); // Prázdné pole = spustí se jen jednou
+    }, []);
 
     // Hook pro načtení nového souboru
     useEffect(() => {
         if (!file) {
-            // Pokud je soubor odstraněn, vyčistíme model
             if (modelRef.current) {
                 sceneRef.current.remove(modelRef.current);
                 modelRef.current = null;
@@ -2324,42 +2349,46 @@ const ModelViewer = ({ file, color }) => {
                 const loader = new THREE.STLLoader();
                 const geometry = loader.parse(contents);
                 
-                // Centrování geometrie
-                geometry.center();
+                // --- 1. AUTOMATICKÁ ROTACE (Fix pro CAD modely) ---
+                // Většina STL z CADu má Z jako osu nahoru. Three.js má Y.
+                // Otočíme model o -90 stupňů kolem osy X, aby "stál".
+                geometry.rotateX(-Math.PI / 2);
+
+                // --- 2. CENTROVÁNÍ A UMÍSTĚNÍ NA PODLOŽKU ---
+                geometry.computeBoundingBox();
+                const box = geometry.boundingBox;
+                const center = new THREE.Vector3();
+                box.getCenter(center);
+
+                // Posuneme střed modelu na [0,0] v osách X a Z.
+                // Posuneme model v ose Y tak, aby jeho nejnižší bod (box.min.y) byl na 0.
+                geometry.translate(-center.x, -box.min.y, -center.z);
 
                 const material = new THREE.MeshStandardMaterial({
-                    color: new THREE.Color(color), // Použijeme rovnou barvu
-                    metalness: 0.1,
+                    color: new THREE.Color(color),
+                    metalness: 0.3,
                     roughness: 0.5,
                 });
 
-                // Odstranění starého modelu, pokud existuje
                 if (modelRef.current) {
                     sceneRef.current.remove(modelRef.current);
                 }
 
                 const mesh = new THREE.Mesh(geometry, material);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                
                 sceneRef.current.add(mesh);
                 modelRef.current = mesh;
 
-                // Automatické přizpůsobení kamery modelu
-                const box = new THREE.Box3().setFromObject(mesh);
-                const size = box.getSize(new THREE.Vector3());
-                const center = box.getCenter(new THREE.Vector3());
+                // Přizpůsobení kamery
+                geometry.computeBoundingSphere();
+                const radius = geometry.boundingSphere.radius;
+                const controls = controlsRef.current;
                 
-                const maxSize = Math.max(size.x, size.y, size.z);
-                const fitHeightDistance = maxSize / (2 * Math.atan(Math.PI * cameraRef.current.fov / 360));
-                const fitWidthDistance = fitHeightDistance / cameraRef.current.aspect;
-                const distance = 1.5 * Math.max(fitHeightDistance, fitWidthDistance); // 1.5x zoom out
-                
-                const direction = controlsRef.current.target.clone()
-                    .sub(cameraRef.current.position)
-                    .normalize()
-                    .multiplyScalar(distance);
-
-                controlsRef.current.target.copy(center);
-                cameraRef.current.position.copy(center).sub(direction);
-                controlsRef.current.update();
+                // Zaměříme se na střed modelu (který je teď kousek nad podložkou)
+                controls.target.set(0, radius / 2, 0);
+                controls.update();
                 
             } catch (error) {
                 console.error("Chyba při parsování STL v náhledu:", error);
@@ -2367,20 +2396,18 @@ const ModelViewer = ({ file, color }) => {
         };
         reader.readAsArrayBuffer(file);
 
-    }, [file]); // Spustí se při změně souboru
+    }, [file]);
 
     // Hook pro změnu barvy
     useEffect(() => {
         if (modelRef.current && modelRef.current.material) {
-            // Tady bezpečně aplikujeme barvu
              try {
                 modelRef.current.material.color.set(color);
             } catch (e) {
-                console.warn("Neplatná barva pro 3D náhled:", color, e);
-                modelRef.current.material.color.set(0xffffff); // Fallback na bílou
+                modelRef.current.material.color.set(0xffffff);
             }
         }
-    }, [color]); // Spustí se při změně barvy
+    }, [color]);
 
     return (
         <div ref={mountRef} className="three-canvas" />
@@ -2417,25 +2444,19 @@ const CustomPrintPage = () => {
   
   const calculateVolume = (geometry) => {
       if (!geometry.isBufferGeometry) {
-          console.error("Geometrie není BufferGeometry");
           return 0;
       }
-      
       const positions = geometry.attributes.position.array;
       let volume = 0;
-      
       const p1 = new THREE.Vector3();
       const p2 = new THREE.Vector3();
       const p3 = new THREE.Vector3();
-      
       for (let i = 0; i < positions.length; i += 9) {
           p1.set(positions[i], positions[i+1], positions[i+2]);
           p2.set(positions[i+3], positions[i+4], positions[i+5]);
           p3.set(positions[i+6], positions[i+7], positions[i+8]);
-          
           volume += p1.dot(p2.clone().cross(p3)) / 6.0;
       }
-      
       return Math.abs(volume / 1000.0);
   };
   
@@ -2458,18 +2479,17 @@ const CustomPrintPage = () => {
               const contents = event.target.result;
               const loader = new THREE.STLLoader();
               const geometry = loader.parse(contents);
-              
               const volumeCm3 = calculateVolume(geometry);
               
               if (volumeCm3 === 0) {
-                  throw new Error("Nepodařilo se vypočítat objem modelu.");
+                  throw new Error("Nepodařilo se vypočítat objem.");
               }
 
               calculatePrice(volumeCm3, uploadedFile.name);
 
           } catch (error) {
               console.error("Chyba při parsování STL:", error);
-              showToast("Chyba při zpracování .stl souboru. Je soubor validní?");
+              showToast("Chyba při zpracování .stl souboru.");
               setIsCalculating(false);
               setFile(null);
           }
@@ -2490,17 +2510,14 @@ const CustomPrintPage = () => {
       const speed = PRINT_SPEEDS[quality];
       
       if (!speed) {
-          showToast("Chyba: Neplatná kvalita tisku.");
           setIsCalculating(false);
           return;
       }
 
       const weightG = volumeCm3 * density;
       const materialCost = weightG * pricePerGram;
-      
       const timeH = volumeCm3 / speed;
       const timeCost = timeH * PRICE_PER_HOUR;
-      
       const totalPrice = PRICE_SETUP_FEE + materialCost + timeCost;
       
       setCalcResult({
@@ -2579,9 +2596,7 @@ const CustomPrintPage = () => {
       }
   };
 
-  // *** ZÍSKÁNÍ HEX KÓDU PRO NÁHLED ***
   let viewerColorHex = (PLA_COLORS.find(c => c.id === color) || PLA_COLORS[0]).hex;
-  // Fallback pro "Duhovou" (gradient) na bílou
   if (viewerColorHex.startsWith('linear-gradient')) {
       viewerColorHex = '#FFFFFF';
   }
@@ -2606,9 +2621,7 @@ const CustomPrintPage = () => {
       <section className="container mx-auto max-w-7xl px-4 py-16">
         <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
             
-            {/* Levá strana - Upload a Nastavení */}
             <div className="space-y-8">
-                {/* 1. Krok - Upload */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-2xl">1. Nahrajte váš model</CardTitle>
@@ -2654,14 +2667,12 @@ const CustomPrintPage = () => {
                     </CardContent>
                 </Card>
 
-                {/* 2. Krok - Nastavení */}
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-2xl">2. Zvolte parametry tisku</CardTitle>
                         <CardDescription>Cena a náhled se automaticky přepočítá.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        {/* Výběr materiálu */}
                         <div>
                             <Label className="text-base font-medium">Materiál</Label>
                             <RadioGroup value={material} onValueChange={setMaterial} name="material" className="mt-2">
@@ -2681,7 +2692,6 @@ const CustomPrintPage = () => {
                                 </RadioGroupItem>
                             </RadioGroup>
                             
-                            {/* Výběr barvy (pouze pro PLA) */}
                             {material === 'PLA' && (
                                 <div className="pt-4 border-t mt-6">
                                     <Label className="text-base font-medium">Barva (PLA)</Label>
@@ -2710,7 +2720,6 @@ const CustomPrintPage = () => {
                             )}
                         </div>
                         
-                        {/* Výběr kvality */}
                         <div>
                             <Label className="text-base font-medium">Kvalita (Výška vrstvy)</Label>
                             <RadioGroup value={quality} onValueChange={(val) => setQuality(parseFloat(val))} name="quality" className="mt-2">
@@ -2726,10 +2735,8 @@ const CustomPrintPage = () => {
                 </Card>
             </div>
             
-            {/* Pravá strana - Náhled a Kalkulace */}
             <div className="lg:sticky top-28 h-fit space-y-8">
                 
-                {/* NOVINKA: 3D NÁHLED - ZOBRAZÍ SE JEN PO NAHRÁNÍ SOUBORU */}
                 {file && (
                     <Card>
                         <CardHeader>
@@ -2742,7 +2749,6 @@ const CustomPrintPage = () => {
                     </Card>
                 )}
 
-                {/* Kalkulace */}
                 <Card className="bg-gray-50/70 shadow-lg">
                     <CardHeader>
                         <CardTitle className="text-2xl">Cenová kalkulace</CardTitle>
